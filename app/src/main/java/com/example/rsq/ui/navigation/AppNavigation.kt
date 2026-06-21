@@ -87,12 +87,23 @@ fun AppNavigation() {
         }
 
         composable(Screen.RoleSelection.route) {
-            RoleSelectionScreen { role ->
-                when (role) {
-                    "VICTIM" -> navController.navigate(Screen.VictimHome.route)
-                    "VOLUNTEER" -> navController.navigate(Screen.VolunteerHome.route)
+            // Navigate to login if user logs out
+            LaunchedEffect(authState) {
+                if (authState is AuthState.LoggedOut) {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.RoleSelection.route) { inclusive = true }
+                    }
                 }
             }
+            RoleSelectionScreen(
+                onLogout = { authViewModel.logout() },
+                onRoleSelected = { role ->
+                    when (role) {
+                        "VICTIM" -> navController.navigate(Screen.VictimHome.route)
+                        "VOLUNTEER" -> navController.navigate(Screen.VolunteerHome.route)
+                    }
+                }
+            )
         }
 
         composable(Screen.VictimHome.route) {

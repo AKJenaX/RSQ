@@ -3,6 +3,8 @@ package com.example.rsq.ui.role
 import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,7 +18,10 @@ import androidx.compose.ui.unit.sp
 import com.example.rsq.ui.theme.RSQTheme
 
 @Composable
-fun RoleSelectionScreen(onRoleSelected: (String) -> Unit) {
+fun RoleSelectionScreen(
+    onLogout: () -> Unit,
+    onRoleSelected: (String) -> Unit
+) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -108,6 +113,26 @@ fun RoleSelectionScreen(onRoleSelected: (String) -> Unit) {
                 }
             }
             
+            Spacer(modifier = Modifier.height(32.dp))
+
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+                )
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Logout", fontWeight = FontWeight.Bold)
+            }
+
             Text(
                 text = "You can change this anytime in settings",
                 style = MaterialTheme.typography.bodySmall,
@@ -122,6 +147,6 @@ fun RoleSelectionScreen(onRoleSelected: (String) -> Unit) {
 @Composable
 fun RoleSelectionScreenPreview() {
     RSQTheme {
-        RoleSelectionScreen {}
+        RoleSelectionScreen(onLogout = {}, onRoleSelected = {})
     }
 }
