@@ -90,6 +90,32 @@ fun ReportHistoryScreen(
 }
 
 @Composable
+fun LocationDetails(latitude: Double?, longitude: Double?) {
+    Column {
+        if (latitude != null && longitude != null) {
+            Text(
+                text = "Latitude: ${"%.6f".format(latitude)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "Longitude: ${"%.6f".format(longitude)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium
+            )
+        } else {
+            Text(
+                text = "Location unavailable",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+    }
+}
+
+@Composable
 fun ReportItemCard(report: Report) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth(),
@@ -118,6 +144,9 @@ fun ReportItemCard(report: Report) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            LocationDetails(report.latitude, report.longitude)
 
             Divider(modifier = Modifier.padding(vertical = 4.dp))
 
