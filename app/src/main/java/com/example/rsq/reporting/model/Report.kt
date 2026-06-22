@@ -1,0 +1,11 @@
+package com.example.rsq.reporting.model
+
+data class Report(
+    val id: String = "",
+    val userId: String = "",
+    val title: String = "",
+    val description: String = "",
+    val severity: String = "MEDIUM",
+    val status: String = "PENDING",
+    val timestamp: Long = System.currentTimeMillis()
+)
