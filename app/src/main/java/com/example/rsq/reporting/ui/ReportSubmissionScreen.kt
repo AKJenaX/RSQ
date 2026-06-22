@@ -276,7 +276,9 @@ fun ReportSubmissionScreen(
                                 description = description,
                                 severity = severity,
                                 status = "PENDING",
-                                timestamp = System.currentTimeMillis()
+                                timestamp = System.currentTimeMillis(),
+                                latitude = locationState.latitude,
+                                longitude = locationState.longitude
                             )
                             viewModel.submitReport(report)
                         }

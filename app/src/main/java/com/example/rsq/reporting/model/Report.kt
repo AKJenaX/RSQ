@@ -7,5 +7,7 @@ data class Report(
     val description: String = "",
     val severity: String = "MEDIUM",
     val status: String = "PENDING",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
