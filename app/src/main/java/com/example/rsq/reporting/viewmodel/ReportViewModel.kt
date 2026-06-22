@@ -17,6 +17,9 @@ class ReportViewModel(
     private val _reportState = MutableStateFlow<ReportState>(ReportState.Idle)
     val reportState: StateFlow<ReportState> = _reportState.asStateFlow()
 
+    private val _reports = MutableStateFlow<List<Report>>(emptyList())
+    val reports: StateFlow<List<Report>> = _reports.asStateFlow()
+
     fun submitReport(report: Report) {
         viewModelScope.launch {
             _reportState.value = ReportState.Loading
@@ -26,6 +29,21 @@ class ReportViewModel(
             } else {
                 _reportState.value = ReportState.Error(
                     result.exceptionOrNull()?.message ?: "Failed to submit report"
+                )
+            }
+        }
+    }
+
+    fun loadReports(userId: String) {
+        viewModelScope.launch {
+            _reportState.value = ReportState.Loading
+            val result = repository.getReports(userId)
+            if (result.isSuccess) {
+                _reports.value = result.getOrNull() ?: emptyList()
+                _reportState.value = ReportState.Idle
+            } else {
+                _reportState.value = ReportState.Error(
+                    result.exceptionOrNull()?.message ?: "Failed to load reports"
                 )
             }
         }
