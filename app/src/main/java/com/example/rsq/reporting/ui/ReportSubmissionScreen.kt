@@ -25,6 +25,9 @@ import androidx.core.content.ContextCompat
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.viewmodel.ReportViewModel
+import com.example.rsq.location.viewmodel.LocationViewModel
+import com.example.rsq.location.data.LocationRepository
+import com.google.android.gms.location.LocationServices
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +37,11 @@ fun ReportSubmissionScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val locationRepository = remember { LocationRepository(fusedLocationClient) }
+    val locationViewModel: LocationViewModel = remember { LocationViewModel(locationRepository) }
+    val locationState by locationViewModel.locationState.collectAsState()
+
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     var severity by rememberSaveable { mutableStateOf("MEDIUM") }
@@ -63,6 +71,13 @@ fun ReportSubmissionScreen(
                     Manifest.permission.ACCESS_COARSE_LOCATION
                 )
             )
+        }
+    }
+
+    // Fetch location when permission is granted
+    LaunchedEffect(isLocationPermissionGranted) {
+        if (isLocationPermissionGranted) {
+            locationViewModel.fetchLocation()
         }
     }
 
@@ -123,6 +138,41 @@ fun ReportSubmissionScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+            }
+
+            // Display current coordinates
+            if (isLocationPermissionGranted) {
+                Surface(
+                    modifier = Modifier
+                        .padding(bottom = 24.dp)
+                        .fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = MaterialTheme.shapes.medium,
+                    tonalElevation = 1.dp
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Current Location",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        if (locationState.isLoading) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        } else if (locationState.error != null) {
+                            Text(
+                                text = "Error: ${locationState.error}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        } else {
+                            Text(
+                                text = "Lat: ${locationState.latitude ?: "N/A"}, Lng: ${locationState.longitude ?: "N/A"}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 }
             }
