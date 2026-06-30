@@ -33,7 +33,9 @@ import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.location.viewmodel.LocationViewModel
 import com.example.rsq.location.data.LocationRepository
+import com.example.rsq.storage.data.StorageRepository
 import com.google.android.gms.location.LocationServices
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,10 +45,13 @@ fun ReportSubmissionScreen(
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     val locationRepository = remember { LocationRepository(fusedLocationClient) }
     val locationViewModel: LocationViewModel = remember { LocationViewModel(locationRepository) }
     val locationState by locationViewModel.locationState.collectAsState()
+
+    val storageRepository = remember { StorageRepository() }
 
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
@@ -54,6 +59,8 @@ fun ReportSubmissionScreen(
     var expanded by remember { mutableStateOf(false) }
     var validationError by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var isUploadingImage by remember { mutableStateOf(false) }
+    var uploadError by remember { mutableStateOf<String?>(null) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -104,6 +111,7 @@ fun ReportSubmissionScreen(
             description = ""
             severity = "MEDIUM"
             selectedImageUri = null
+            uploadError = null
             viewModel.resetState()
         }
     }
@@ -213,6 +221,7 @@ fun ReportSubmissionScreen(
                         onValueChange = { 
                             title = it 
                             validationError = null
+                            uploadError = null
                         },
                         label = { Text("Title") },
                         placeholder = { Text("e.g., Medical Emergency, Fire") },
@@ -227,6 +236,7 @@ fun ReportSubmissionScreen(
                         onValueChange = { 
                             description = it 
                             validationError = null
+                            uploadError = null
                         },
                         label = { Text("Description") },
                         placeholder = { Text("Describe the situation in detail...") },
@@ -355,17 +365,37 @@ fun ReportSubmissionScreen(
                         title.isBlank() -> validationError = "Title is required"
                         description.isBlank() -> validationError = "Description is required"
                         else -> {
-                            val report = Report(
-                                userId = currentUserId,
-                                title = title,
-                                description = description,
-                                severity = severity,
-                                status = "PENDING",
-                                timestamp = System.currentTimeMillis(),
-                                latitude = locationState.latitude,
-                                longitude = locationState.longitude
-                            )
-                            viewModel.submitReport(report)
+                            coroutineScope.launch {
+                                var uploadedImageUrl: String? = null
+                                
+                                if (selectedImageUri != null) {
+                                    isUploadingImage = true
+                                    uploadError = null
+                                    
+                                    val uploadResult = storageRepository.uploadImage(selectedImageUri!!)
+                                    isUploadingImage = false
+                                    
+                                    if (uploadResult.isSuccess) {
+                                        uploadedImageUrl = uploadResult.getOrNull()
+                                    } else {
+                                        uploadError = uploadResult.exceptionOrNull()?.message ?: "Image upload failed"
+                                        return@launch
+                                    }
+                                }
+
+                                val report = Report(
+                                    userId = currentUserId,
+                                    title = title,
+                                    description = description,
+                                    severity = severity,
+                                    status = "PENDING",
+                                    timestamp = System.currentTimeMillis(),
+                                    latitude = locationState.latitude,
+                                    longitude = locationState.longitude,
+                                    imageUrl = uploadedImageUrl
+                                )
+                                viewModel.submitReport(report)
+                            }
                         }
                     }
                 },
@@ -373,30 +403,30 @@ fun ReportSubmissionScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = MaterialTheme.shapes.medium,
-                enabled = reportState !is ReportState.Loading
+                enabled = reportState !is ReportState.Loading && !isUploadingImage
             ) {
-                if (reportState is ReportState.Loading) {
+                if (reportState is ReportState.Loading || isUploadingImage) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Submitting...")
+                    Text(if (isUploadingImage) "Uploading Image..." else "Submitting...")
                 } else {
                     Text("Submit Report", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             // Status feedback
-            val statusMessage = validationError ?: when (val state = reportState) {
+            val statusMessage = validationError ?: uploadError ?: when (val state = reportState) {
                 is ReportState.Success -> state.message
                 is ReportState.Error -> state.message
                 else -> null
             }
 
             if (statusMessage != null) {
-                val isError = validationError != null || reportState is ReportState.Error
+                val isError = validationError != null || uploadError != null || reportState is ReportState.Error
                 Surface(
                     modifier = Modifier
                         .padding(top = 24.dp)

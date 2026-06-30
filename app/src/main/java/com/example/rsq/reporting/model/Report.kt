@@ -9,5 +9,6 @@ data class Report(
     val status: String = "PENDING",
     val timestamp: Long = System.currentTimeMillis(),
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val imageUrl: String? = null
 )
