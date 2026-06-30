@@ -13,6 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.viewmodel.ReportViewModel
@@ -144,6 +147,18 @@ fun ReportItemCard(report: Report) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            if (report.imageUrl != null) {
+                AsyncImage(
+                    model = report.imageUrl,
+                    contentDescription = "Report image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(MaterialTheme.shapes.medium),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
             LocationDetails(report.latitude, report.longitude)
