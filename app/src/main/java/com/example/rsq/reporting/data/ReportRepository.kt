@@ -2,6 +2,7 @@ package com.example.rsq.reporting.data
 
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
+import com.example.rsq.reporting.domain.ReportLifecycle
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
@@ -47,6 +48,26 @@ class ReportRepository(
                 )
             }
             Result.success(reports)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateReportStatus(
+        reportId: String,
+        currentStatus: ReportStatus,
+        newStatus: ReportStatus
+    ): Result<Unit> {
+        if (!ReportLifecycle.canTransition(currentStatus, newStatus)) {
+            return Result.failure(IllegalArgumentException("Invalid status transition: $currentStatus -> $newStatus"))
+        }
+
+        return try {
+            firestore.collection("reports")
+                .document(reportId)
+                .update("status", newStatus.toFirestoreValue())
+                .await()
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }

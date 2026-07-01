@@ -2,7 +2,7 @@ package com.example.rsq.reporting.domain
 
 import com.example.rsq.reporting.model.ReportStatus
 
-object ReportStatusTransition {
+object ReportLifecycle {
 
     /**
      * Checks if a transition from one [ReportStatus] to another is valid.
