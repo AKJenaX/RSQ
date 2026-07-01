@@ -19,6 +19,8 @@ import coil.compose.AsyncImage
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.model.ReportState
+import com.example.rsq.reporting.ui.components.SeverityBadge
+import com.example.rsq.reporting.ui.components.StatusBadge
 import com.example.rsq.reporting.viewmodel.ReportViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -179,54 +181,6 @@ fun ReportItemCard(report: Report) {
                 )
             }
         }
-    }
-}
-
-@Composable
-fun SeverityBadge(severity: String) {
-    val color = when (severity.uppercase()) {
-        "CRITICAL" -> MaterialTheme.colorScheme.error
-        "HIGH" -> Color(0xFFF44336)
-        "MEDIUM" -> Color(0xFFFF9800)
-        "LOW" -> Color(0xFF4CAF50)
-        else -> MaterialTheme.colorScheme.primary
-    }
-
-    Surface(
-        color = color.copy(alpha = 0.1f),
-        shape = MaterialTheme.shapes.small,
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f))
-    ) {
-        Text(
-            text = severity,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = color
-        )
-    }
-}
-
-@Composable
-fun StatusBadge(status: ReportStatus) {
-    val color = when (status) {
-        ReportStatus.RESOLVED -> Color(0xFF4CAF50)
-        ReportStatus.IN_PROGRESS -> Color(0xFF2196F3)
-        ReportStatus.OPEN -> Color(0xFFFFC107)
-        ReportStatus.ASSIGNED -> Color(0xFF9C27B0)
-    }
-
-    Surface(
-        color = color.copy(alpha = 0.1f),
-        shape = MaterialTheme.shapes.extraSmall,
-    ) {
-        Text(
-            text = status.name,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Medium,
-            color = color
-        )
     }
 }
 
