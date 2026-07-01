@@ -58,6 +58,8 @@ class AuthViewModel(private val repository: AuthRepository = AuthRepository()) :
         _authState.value = AuthState.Idle
     }
 
+    fun getCurrentUserId(): String = repository.getCurrentUserId() ?: "anonymous"
+
     private fun mapAuthError(exception: Throwable?): String {
         return when (exception) {
             is FirebaseAuthInvalidCredentialsException -> "Invalid email or password"

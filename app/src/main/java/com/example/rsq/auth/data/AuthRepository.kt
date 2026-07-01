@@ -31,4 +31,8 @@ class AuthRepository(
     fun isLoggedIn(): Boolean {
         return firebaseAuth.currentUser != null
     }
+
+    fun getCurrentUserId(): String? {
+        return firebaseAuth.currentUser?.uid
+    }
 }

@@ -12,6 +12,9 @@ import com.example.rsq.auth.model.AuthState
 import com.example.rsq.auth.ui.LoginScreen
 import com.example.rsq.auth.ui.RegisterScreen
 import com.example.rsq.auth.viewmodel.AuthViewModel
+import com.example.rsq.reporting.ui.ReportHistoryScreen
+import com.example.rsq.reporting.ui.ReportSubmissionScreen
+import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.ui.home.VictimHomeScreen
 import com.example.rsq.ui.home.VolunteerHomeScreen
 import com.example.rsq.ui.role.RoleSelectionScreen
@@ -22,12 +25,15 @@ sealed class Screen(val route: String) {
     object RoleSelection : Screen("role_selection")
     object VictimHome : Screen("victim_home")
     object VolunteerHome : Screen("volunteer_home")
+    object ReportSubmission : Screen("report_submission")
+    object ReportHistory : Screen("report_history")
 }
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = viewModel()
+    val reportViewModel: ReportViewModel = viewModel()
     val authState by authViewModel.authState.collectAsState()
 
     // TODO: Introduce AuthGate/Splash route for cleaner startup authentication flow.
@@ -107,11 +113,19 @@ fun AppNavigation() {
         }
 
         composable(Screen.VictimHome.route) {
-            VictimHomeScreen {
-                navController.navigate(Screen.RoleSelection.route) {
-                    popUpTo(Screen.RoleSelection.route) { inclusive = true }
+            VictimHomeScreen(
+                onTriggerSOS = {
+                    navController.navigate(Screen.ReportSubmission.route)
+                },
+                onViewHistory = {
+                    navController.navigate(Screen.ReportHistory.route)
+                },
+                onSwitchRole = {
+                    navController.navigate(Screen.RoleSelection.route) {
+                        popUpTo(Screen.RoleSelection.route) { inclusive = true }
+                    }
                 }
-            }
+            )
         }
 
         composable(Screen.VolunteerHome.route) {
@@ -120,6 +134,26 @@ fun AppNavigation() {
                     popUpTo(Screen.RoleSelection.route) { inclusive = true }
                 }
             }
+        }
+
+        composable(Screen.ReportSubmission.route) {
+            ReportSubmissionScreen(
+                viewModel = reportViewModel,
+                currentUserId = authViewModel.getCurrentUserId(),
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.ReportHistory.route) {
+            ReportHistoryScreen(
+                viewModel = reportViewModel,
+                currentUserId = authViewModel.getCurrentUserId(),
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
         }
     }
 }

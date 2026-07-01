@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -19,16 +20,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.rsq.data.model.Priority
-import com.example.rsq.data.model.SOSMessage
-import com.example.rsq.ui.viewmodel.MessageViewModel
-import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VictimHomeScreen(
-    messageViewModel: MessageViewModel = viewModel(),
+    onTriggerSOS: () -> Unit,
+    onViewHistory: () -> Unit,
     onSwitchRole: () -> Unit,
 ) {
     Scaffold(
@@ -38,6 +35,9 @@ fun VictimHomeScreen(
                     Text("Emergency Mode", fontWeight = FontWeight.Bold) 
                 },
                 actions = {
+                    IconButton(onClick = onViewHistory) {
+                        Icon(imageVector = Icons.Default.History, contentDescription = "View History")
+                    }
                     TextButton(onClick = onSwitchRole) {
                         Icon(
                             imageVector = Icons.Default.Refresh,
@@ -91,19 +91,7 @@ fun VictimHomeScreen(
                 )
                 
                 Button(
-                    onClick = {
-                        val message = SOSMessage(
-                            id = UUID.randomUUID().toString(),
-                            role = "VICTIM",
-                            latitude = 0.0,
-                            longitude = 0.0,
-                            timestamp = System.currentTimeMillis(),
-                            priority = Priority.HIGH,
-                            message = "Emergency SOS Triggered"
-                        )
-                        Log.d("VictimHome", "SOS triggered: $message")
-                        messageViewModel.sendSOS(message)
-                    },
+                    onClick = onTriggerSOS,
                     modifier = Modifier.size(180.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.Transparent,
@@ -157,12 +145,12 @@ fun VictimHomeScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = "Searching nearby devices...",
+                            text = "Ready to Help",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Stay calm. Your signal is being broadcasted.",
+                            text = "Your location will be shared when you trigger SOS.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -172,3 +160,4 @@ fun VictimHomeScreen(
         }
     }
 }
+
