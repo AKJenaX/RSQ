@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import com.example.rsq.reporting.model.Report
+import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.viewmodel.ReportViewModel
 import java.text.SimpleDateFormat
@@ -207,12 +208,12 @@ fun SeverityBadge(severity: String) {
 }
 
 @Composable
-fun StatusBadge(status: String) {
-    val color = when (status.uppercase()) {
-        "RESOLVED" -> Color(0xFF4CAF50)
-        "IN_PROGRESS" -> Color(0xFF2196F3)
-        "PENDING" -> Color(0xFFFFC107)
-        else -> MaterialTheme.colorScheme.secondary
+fun StatusBadge(status: ReportStatus) {
+    val color = when (status) {
+        ReportStatus.RESOLVED -> Color(0xFF4CAF50)
+        ReportStatus.IN_PROGRESS -> Color(0xFF2196F3)
+        ReportStatus.OPEN -> Color(0xFFFFC107)
+        ReportStatus.ASSIGNED -> Color(0xFF9C27B0)
     }
 
     Surface(
@@ -220,7 +221,7 @@ fun StatusBadge(status: String) {
         shape = MaterialTheme.shapes.extraSmall,
     ) {
         Text(
-            text = status,
+            text = status.name,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Medium,

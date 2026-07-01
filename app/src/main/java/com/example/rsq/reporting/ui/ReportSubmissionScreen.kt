@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.rsq.reporting.model.Report
+import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.location.viewmodel.LocationViewModel
@@ -388,7 +389,7 @@ fun ReportSubmissionScreen(
                                     title = title,
                                     description = description,
                                     severity = severity,
-                                    status = "PENDING",
+                                    status = ReportStatus.OPEN,
                                     timestamp = System.currentTimeMillis(),
                                     latitude = locationState.latitude,
                                     longitude = locationState.longitude,
