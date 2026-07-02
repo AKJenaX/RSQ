@@ -35,6 +35,7 @@ import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.location.viewmodel.LocationViewModel
 import com.example.rsq.location.data.LocationRepository
 import com.example.rsq.storage.data.StorageRepository
+import com.example.rsq.ai.data.SeverityEngine
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.launch
 
@@ -56,8 +57,6 @@ fun ReportSubmissionScreen(
 
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
-    var severity by rememberSaveable { mutableStateOf("MEDIUM") }
-    var expanded by remember { mutableStateOf(false) }
     var validationError by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isUploadingImage by remember { mutableStateOf(false) }
@@ -103,14 +102,12 @@ fun ReportSubmissionScreen(
     }
 
     val reportState by viewModel.reportState.collectAsState()
-    val severityOptions = listOf("LOW", "MEDIUM", "HIGH", "CRITICAL")
 
     // Handle form reset and ViewModel state reset on success
     LaunchedEffect(reportState) {
         if (reportState is ReportState.Success) {
             title = ""
             description = ""
-            severity = "MEDIUM"
             selectedImageUri = null
             uploadError = null
             viewModel.resetState()
@@ -249,41 +246,7 @@ fun ReportSubmissionScreen(
                         maxLines = 5
                     )
 
-                    // Severity Dropdown
-                    ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = !expanded },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedTextField(
-                            value = severity,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Severity Level") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                            modifier = Modifier
-                                .menuAnchor()
-                                .fillMaxWidth(),
-                            shape = MaterialTheme.shapes.medium
-                        )
-
-                        ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            severityOptions.forEach { selectionOption ->
-                                DropdownMenuItem(
-                                    text = { Text(selectionOption) },
-                                    onClick = {
-                                        severity = selectionOption
-                                        expanded = false
-                                    },
-                                    contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                                )
-                            }
-                        }
-                    }
+                    // Severity is now determined automatically by AI.
                 }
             }
 
@@ -384,11 +347,13 @@ fun ReportSubmissionScreen(
                                     }
                                 }
 
+                                val prediction = SeverityEngine.predictSeverity(title, description)
+
                                 val report = Report(
                                     userId = currentUserId,
                                     title = title,
                                     description = description,
-                                    severity = severity,
+                                    severity = prediction.severity,
                                     status = ReportStatus.OPEN,
                                     timestamp = System.currentTimeMillis(),
                                     latitude = locationState.latitude,
