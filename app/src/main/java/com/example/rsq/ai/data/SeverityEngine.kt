@@ -1,6 +1,7 @@
 package com.example.rsq.ai.data
 
 import com.example.rsq.ai.model.SeverityPrediction
+import com.example.rsq.ai.model.SeverityRules
 
 /**
  * A rule-based AI engine that predicts the severity of an emergency report
@@ -8,32 +9,28 @@ import com.example.rsq.ai.model.SeverityPrediction
  */
 object SeverityEngine {
 
-    private val CRITICAL_KEYWORDS = listOf("fire", "explosion", "collapse", "earthquake", "flood", "building collapse")
-    private val HIGH_KEYWORDS = listOf("accident", "unconscious", "bleeding", "trapped", "severe injury")
-    private val MEDIUM_KEYWORDS = listOf("injury", "medical", "power outage", "road blocked", "stranded")
-
     /**
-     * Predicts severity based on keyword matching.
+     * Predicts severity based on keyword matching from [SeverityRules].
      */
     fun predictSeverity(title: String, description: String): SeverityPrediction {
         val content = "${title} ${description}".lowercase()
 
         return when {
-            containsAny(content, CRITICAL_KEYWORDS) -> {
+            containsAny(content, SeverityRules.CRITICAL_KEYWORDS) -> {
                 SeverityPrediction(
                     severity = "CRITICAL",
                     confidence = 0.95f,
                     reason = "High-risk keywords related to large-scale disasters or fires detected."
                 )
             }
-            containsAny(content, HIGH_KEYWORDS) -> {
+            containsAny(content, SeverityRules.HIGH_KEYWORDS) -> {
                 SeverityPrediction(
                     severity = "HIGH",
                     confidence = 0.90f,
                     reason = "Keywords indicating life-threatening injuries or accidents detected."
                 )
             }
-            containsAny(content, MEDIUM_KEYWORDS) -> {
+            containsAny(content, SeverityRules.MEDIUM_KEYWORDS) -> {
                 SeverityPrediction(
                     severity = "MEDIUM",
                     confidence = 0.80f,
