@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +62,11 @@ fun ReportSubmissionScreen(
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isUploadingImage by remember { mutableStateOf(false) }
     var uploadError by remember { mutableStateOf<String?>(null) }
+
+    // Live AI Prediction state
+    val aiPrediction by remember(title, description) {
+        derivedStateOf { SeverityEngine.predictSeverity(title, description) }
+    }
 
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -247,6 +253,74 @@ fun ReportSubmissionScreen(
                     )
 
                     // Severity is now determined automatically by AI.
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // AI Severity Feedback Card
+            ElevatedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "AI Severity Analysis",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Predicted Severity:",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = aiPrediction.severity,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = when (aiPrediction.severity) {
+                                "CRITICAL" -> MaterialTheme.colorScheme.error
+                                "HIGH" -> Color(0xFFF44336)
+                                "MEDIUM" -> Color(0xFFFF9800)
+                                else -> Color(0xFF4CAF50)
+                            }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Confidence:",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = "${(aiPrediction.confidence * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Divider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
+
+                    Text(
+                        text = aiPrediction.reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
