@@ -4,6 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -12,6 +16,10 @@ import com.example.rsq.auth.model.AuthState
 import com.example.rsq.auth.ui.LoginScreen
 import com.example.rsq.auth.ui.RegisterScreen
 import com.example.rsq.auth.viewmodel.AuthViewModel
+import com.example.rsq.mesh.data.NearbyMeshTransport
+import com.example.rsq.mesh.data.NodeIdentityRepository
+import com.example.rsq.mesh.ui.MeshTestScreen
+import com.example.rsq.mesh.viewmodel.MeshTestViewModel
 import com.example.rsq.reporting.ui.ReportHistoryScreen
 import com.example.rsq.reporting.ui.ReportSubmissionScreen
 import com.example.rsq.reporting.viewmodel.ReportViewModel
@@ -27,13 +35,20 @@ sealed class Screen(val route: String) {
     object VolunteerHome : Screen("volunteer_home")
     object ReportSubmission : Screen("report_submission")
     object ReportHistory : Screen("report_history")
+    object MeshTest : Screen("mesh_test")
 }
 
 @Composable
 fun AppNavigation() {
+    val context = LocalContext.current
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = viewModel()
     val reportViewModel: ReportViewModel = viewModel()
+    
+    // Mesh dependencies for testing
+    val meshIdentityProvider = remember { NodeIdentityRepository(context) }
+    val meshTransport = remember { NearbyMeshTransport(context, meshIdentityProvider) }
+
     val authState by authViewModel.authState.collectAsState()
 
     // TODO: Introduce AuthGate/Splash route for cleaner startup authentication flow.
@@ -103,6 +118,7 @@ fun AppNavigation() {
             }
             RoleSelectionScreen(
                 onLogout = { authViewModel.logout() },
+                onDebugMesh = { navController.navigate(Screen.MeshTest.route) },
                 onRoleSelected = { role ->
                     when (role) {
                         "VICTIM" -> navController.navigate(Screen.VictimHome.route)
@@ -150,6 +166,22 @@ fun AppNavigation() {
             ReportHistoryScreen(
                 viewModel = reportViewModel,
                 currentUserId = authViewModel.getCurrentUserId(),
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.MeshTest.route) {
+            val meshViewModel: MeshTestViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return MeshTestViewModel(meshTransport, meshIdentityProvider) as T
+                    }
+                }
+            )
+            MeshTestScreen(
+                viewModel = meshViewModel,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

@@ -8,9 +8,7 @@ import com.example.rsq.mesh.model.MeshMessage
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.tasks.await
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -55,6 +53,7 @@ class NearbyMeshTransport(
 
     // Flow for future message observation
     private val _incomingMessages = MutableSharedFlow<MeshMessage>()
+    private val _connectedPeerCount = MutableStateFlow(0)
 
     companion object {
         private const val TAG = "NearbyMeshTransport"
@@ -199,6 +198,10 @@ class NearbyMeshTransport(
         return _incomingMessages.asSharedFlow()
     }
 
+    override fun observeConnectedPeerCount(): Flow<Int> {
+        return _connectedPeerCount.asStateFlow()
+    }
+
     /**
      * Callback for connection lifecycle events.
      */
@@ -235,6 +238,7 @@ class NearbyMeshTransport(
                     val nodeId = peerNodeIds[endpointId] ?: "unknown_node"
                     Log.i(TAG, "Successfully connected to node: $nodeId (endpoint: $endpointId)")
                     peerStates[endpointId] = EndpointState.CONNECTED
+                    updateConnectedPeerCount()
                 }
                 else -> {
                     Log.w(TAG, "Connection failed or rejected for $endpointId: ${result.status.statusMessage}")
@@ -248,6 +252,7 @@ class NearbyMeshTransport(
             Log.i(TAG, "Disconnected from endpoint: $endpointId")
             peerStates.remove(endpointId)
             peerNodeIds.remove(endpointId)
+            updateConnectedPeerCount()
         }
     }
 
@@ -330,5 +335,9 @@ class NearbyMeshTransport(
         require(message.originNodeId.isNotBlank()) { "Origin Node ID must not be blank" }
         require(message.timestamp > 0) { "Invalid timestamp" }
         require(message.ttl >= 0) { "Invalid TTL" }
+    }
+
+    private fun updateConnectedPeerCount() {
+        _connectedPeerCount.value = peerStates.count { it.value == EndpointState.CONNECTED }
     }
 }

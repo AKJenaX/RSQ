@@ -2,7 +2,9 @@ package com.example.rsq.ui.role
 
 import android.util.Log
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material3.*
@@ -20,6 +22,7 @@ import com.example.rsq.ui.theme.RSQTheme
 @Composable
 fun RoleSelectionScreen(
     onLogout: () -> Unit,
+    onDebugMesh: () -> Unit,
     onRoleSelected: (String) -> Unit
 ) {
     Surface(
@@ -29,7 +32,8 @@ fun RoleSelectionScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .padding(24.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -139,6 +143,13 @@ fun RoleSelectionScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 48.dp)
             )
+
+            TextButton(
+                onClick = onDebugMesh,
+                modifier = Modifier.padding(top = 16.dp)
+            ) {
+                Text("Developer: Mesh Test", style = MaterialTheme.typography.labelSmall)
+            }
         }
     }
 }
@@ -147,6 +158,6 @@ fun RoleSelectionScreen(
 @Composable
 fun RoleSelectionScreenPreview() {
     RSQTheme {
-        RoleSelectionScreen(onLogout = {}, onRoleSelected = {})
+        RoleSelectionScreen(onLogout = {}, onDebugMesh = {}, onRoleSelected = {})
     }
 }

@@ -32,4 +32,9 @@ interface MeshTransport {
      * Provides a stream of incoming messages received from the mesh network.
      */
     fun observeIncomingMessages(): Flow<MeshMessage>
+
+    /**
+     * Provides a stream of the number of currently connected peers.
+     */
+    fun observeConnectedPeerCount(): Flow<Int>
 }
