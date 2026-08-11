@@ -7,9 +7,13 @@ import com.example.rsq.mesh.domain.NodeIdentityProvider
 import com.example.rsq.mesh.model.MeshMessage
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.tasks.await
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * Implementation of [MeshTransport] using Google Nearby Connections.
@@ -22,6 +26,9 @@ class NearbyMeshTransport(
 
     private val connectionsClient = Nearby.getConnectionsClient(context.applicationContext)
     private val localNodeId = nodeIdentityProvider.getNodeId()
+
+    // Scope for emitting incoming messages
+    private var transportScope: CoroutineScope? = null
 
     // Internal state for transport lifecycle
     private enum class TransportLifecycle {
@@ -64,6 +71,8 @@ class NearbyMeshTransport(
         Log.i(TAG, "Starting Nearby Mesh Transport for Node: $localNodeId")
         lifecycleState = TransportLifecycle.STARTING
         
+        transportScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        
         startAdvertising()
         startDiscovery()
     }
@@ -71,6 +80,9 @@ class NearbyMeshTransport(
     override fun stop() {
         Log.i(TAG, "Stopping Nearby Mesh Transport")
         lifecycleState = TransportLifecycle.STOPPED
+        
+        transportScope?.cancel()
+        transportScope = null
         
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
@@ -162,7 +174,25 @@ class NearbyMeshTransport(
     }
 
     override suspend fun sendMessage(message: MeshMessage): Result<Unit> {
-        return Result.failure(UnsupportedOperationException("Message transmission not implemented yet in Commit 4"))
+        if (lifecycleState != TransportLifecycle.RUNNING) {
+            return Result.failure(IllegalStateException("Transport is not running"))
+        }
+
+        val connectedEndpoints = peerStates.filter { it.value == EndpointState.CONNECTED }.keys
+        if (connectedEndpoints.isEmpty()) {
+            return Result.failure(IllegalStateException("No connected peers"))
+        }
+
+        return try {
+            val json = Json.encodeToString(message)
+            val payload = Payload.fromBytes(json.toByteArray(Charsets.UTF_8))
+            
+            connectionsClient.sendPayload(connectedEndpoints.toList(), payload).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send message", e)
+            Result.failure(e)
+        }
     }
 
     override fun observeIncomingMessages(): Flow<MeshMessage> {
@@ -267,11 +297,38 @@ class NearbyMeshTransport(
      */
     private val payloadCallback = object : PayloadCallback() {
         override fun onPayloadReceived(endpointId: String, payload: Payload) {
-            Log.v(TAG, "Payload received from $endpointId (ignoring in Commit 4)")
+            if (payload.type != Payload.Type.BYTES) {
+                Log.v(TAG, "Ignoring non-byte payload from $endpointId")
+                return
+            }
+
+            val bytes = payload.asBytes() ?: return
+            val json = String(bytes, Charsets.UTF_8)
+
+            try {
+                val message = Json.decodeFromString<MeshMessage>(json)
+                validateMessage(message)
+                
+                Log.d(TAG, "Received MeshMessage: ${message.id} from $endpointId")
+                
+                transportScope?.launch {
+                    _incomingMessages.emit(message)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to deserialize or validate MeshMessage from $endpointId", e)
+            }
         }
 
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) {
             // No-op
         }
+    }
+
+    private fun validateMessage(message: MeshMessage) {
+        require(message.id.isNotBlank()) { "Message ID must not be blank" }
+        require(message.senderNodeId.isNotBlank()) { "Sender Node ID must not be blank" }
+        require(message.originNodeId.isNotBlank()) { "Origin Node ID must not be blank" }
+        require(message.timestamp > 0) { "Invalid timestamp" }
+        require(message.ttl >= 0) { "Invalid TTL" }
     }
 }

@@ -1,6 +1,7 @@
 package com.example.rsq.mesh.model
 
 import com.example.rsq.data.model.Priority
+import kotlinx.serialization.Serializable
 
 /**
  * Represents a packet of information traveling through the mesh network.
@@ -16,6 +17,7 @@ import com.example.rsq.data.model.Priority
  * @property payload The actual content/data being transmitted.
  * @property ttl Time-To-Live; limits the number of times a message can be re-broadcasted.
  */
+@Serializable
 data class MeshMessage(
     val id: String,
     val senderNodeId: String,
