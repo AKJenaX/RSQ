@@ -4,13 +4,14 @@ import android.content.Context
 import android.util.Log
 import com.example.rsq.mesh.domain.MeshTransport
 import com.example.rsq.mesh.domain.NodeIdentityProvider
+import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.mesh.model.MeshMessage
+import com.example.rsq.mesh.model.MeshTransportStatus
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.tasks.await
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
@@ -27,15 +28,6 @@ class NearbyMeshTransport(
 
     // Scope for emitting incoming messages
     private var transportScope: CoroutineScope? = null
-
-    // Internal state for transport lifecycle
-    private enum class TransportLifecycle {
-        STOPPED,
-        STARTING,
-        RUNNING
-    }
-
-    private var lifecycleState = TransportLifecycle.STOPPED
 
     // Precise tracking of radio status
     private var isAdvertising = false
@@ -54,6 +46,9 @@ class NearbyMeshTransport(
     // Flow for future message observation
     private val _incomingMessages = MutableSharedFlow<MeshMessage>()
     private val _connectedPeerCount = MutableStateFlow(0)
+    
+    // Diagnostic State
+    private val _diagnostics = MutableStateFlow(MeshDiagnostics())
 
     companion object {
         private const val TAG = "NearbyMeshTransport"
@@ -62,13 +57,14 @@ class NearbyMeshTransport(
     }
 
     override fun start() {
-        if (lifecycleState != TransportLifecycle.STOPPED) {
-            Log.d(TAG, "Transport already starting or running (state: $lifecycleState)")
+        if ((_diagnostics.value.status != MeshTransportStatus.STOPPED) && 
+            (_diagnostics.value.status != MeshTransportStatus.ERROR)) {
+            Log.d(TAG, "Transport already starting or running (status: ${_diagnostics.value.status})")
             return
         }
         
         Log.i(TAG, "Starting Nearby Mesh Transport for Node: $localNodeId")
-        lifecycleState = TransportLifecycle.STARTING
+        updateStatus(MeshTransportStatus.STARTING)
         
         transportScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         
@@ -78,7 +74,7 @@ class NearbyMeshTransport(
 
     override fun stop() {
         Log.i(TAG, "Stopping Nearby Mesh Transport")
-        lifecycleState = TransportLifecycle.STOPPED
+        updateStatus(MeshTransportStatus.STOPPED)
         
         transportScope?.cancel()
         transportScope = null
@@ -91,11 +87,16 @@ class NearbyMeshTransport(
         isDiscovering = false
         peerStates.clear()
         peerNodeIds.clear()
+        
+        // Reset full diagnostics on stop
+        _diagnostics.value = MeshDiagnostics()
+        _connectedPeerCount.value = 0
     }
 
     private fun startAdvertising() {
-        if (lifecycleState == TransportLifecycle.STOPPED) return
+        if (_diagnostics.value.status == MeshTransportStatus.STOPPED) return
 
+        Log.d(TAG, "Requesting Nearby advertising start...")
         val advertisingOptions = AdvertisingOptions.Builder()
             .setStrategy(STRATEGY)
             .build()
@@ -106,25 +107,30 @@ class NearbyMeshTransport(
             connectionLifecycleCallback,
             advertisingOptions
         ).addOnSuccessListener {
-            if (lifecycleState != TransportLifecycle.STOPPED) {
+            if (_diagnostics.value.status != MeshTransportStatus.STOPPED) {
                 Log.i(TAG, "Advertising started successfully")
                 isAdvertising = true
-                checkLifecycleRunning()
+                updateDiagnostics { it.copy(isAdvertising = true) }
+                checkLifecycleReady()
             } else {
                 Log.w(TAG, "Advertising started after transport was stopped; stopping immediately")
                 connectionsClient.stopAdvertising()
             }
         }.addOnFailureListener { e ->
-            if (lifecycleState != TransportLifecycle.STOPPED) {
-                Log.e(TAG, "Advertising failed to start", e)
+            if (_diagnostics.value.status != MeshTransportStatus.STOPPED) {
+                val errorMsg = "Advertising failed: ${e.message}"
+                Log.e(TAG, errorMsg, e)
                 isAdvertising = false
+                updateDiagnostics { it.copy(isAdvertising = false, lastError = errorMsg) }
+                updateStatus(MeshTransportStatus.ERROR)
             }
         }
     }
 
     private fun startDiscovery() {
-        if (lifecycleState == TransportLifecycle.STOPPED) return
+        if (_diagnostics.value.status == MeshTransportStatus.STOPPED) return
 
+        Log.d(TAG, "Requesting Nearby discovery start...")
         val discoveryOptions = DiscoveryOptions.Builder()
             .setStrategy(STRATEGY)
             .build()
@@ -134,32 +140,39 @@ class NearbyMeshTransport(
             endpointDiscoveryCallback,
             discoveryOptions
         ).addOnSuccessListener {
-            if (lifecycleState != TransportLifecycle.STOPPED) {
+            if (_diagnostics.value.status != MeshTransportStatus.STOPPED) {
                 Log.i(TAG, "Discovery started successfully")
                 isDiscovering = true
-                checkLifecycleRunning()
+                updateDiagnostics { it.copy(isDiscovering = true) }
+                checkLifecycleReady()
             } else {
                 Log.w(TAG, "Discovery started after transport was stopped; stopping immediately")
                 connectionsClient.stopDiscovery()
             }
         }.addOnFailureListener { e ->
-            if (lifecycleState != TransportLifecycle.STOPPED) {
-                Log.e(TAG, "Discovery failed to start", e)
+            if (_diagnostics.value.status != MeshTransportStatus.STOPPED) {
+                val errorMsg = "Discovery failed: ${e.message}"
+                Log.e(TAG, errorMsg, e)
                 isDiscovering = false
+                updateDiagnostics { it.copy(isDiscovering = false, lastError = errorMsg) }
+                updateStatus(MeshTransportStatus.ERROR)
             }
         }
     }
 
-    private fun checkLifecycleRunning() {
-        // Simple heuristic: transport is RUNNING if both operations have reported success
-        if (isAdvertising && isDiscovering && lifecycleState == TransportLifecycle.STARTING) {
-            Log.i(TAG, "Mesh Transport is now fully RUNNING")
-            lifecycleState = TransportLifecycle.RUNNING
+    private fun checkLifecycleReady() {
+        if (isAdvertising && isDiscovering && _diagnostics.value.status == MeshTransportStatus.STARTING) {
+            Log.i(TAG, "Mesh Transport is now READY")
+            updateStatus(MeshTransportStatus.READY)
+        } else if (isAdvertising && _diagnostics.value.status == MeshTransportStatus.STARTING) {
+            updateStatus(MeshTransportStatus.ADVERTISING)
+        } else if (isDiscovering && _diagnostics.value.status == MeshTransportStatus.STARTING) {
+            updateStatus(MeshTransportStatus.DISCOVERING)
         }
     }
 
     override fun discoverPeers() {
-        if (lifecycleState == TransportLifecycle.STOPPED) {
+        if (_diagnostics.value.status == MeshTransportStatus.STOPPED) {
             Log.w(TAG, "Cannot discover peers while transport is stopped")
             return
         }
@@ -173,8 +186,10 @@ class NearbyMeshTransport(
     }
 
     override suspend fun sendMessage(message: MeshMessage): Result<Unit> {
-        if (lifecycleState != TransportLifecycle.RUNNING) {
-            return Result.failure(IllegalStateException("Transport is not running"))
+        if ((_diagnostics.value.status != MeshTransportStatus.READY) && 
+            (_diagnostics.value.status != MeshTransportStatus.ADVERTISING) &&
+            (_diagnostics.value.status != MeshTransportStatus.DISCOVERING)) {
+            return Result.failure(IllegalStateException("Transport is not active (status: ${_diagnostics.value.status})"))
         }
 
         val connectedEndpoints = peerStates.filter { it.value == EndpointState.CONNECTED }.keys
@@ -190,6 +205,7 @@ class NearbyMeshTransport(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send message", e)
+            updateDiagnostics { it.copy(lastError = "Send failed: ${e.message}") }
             Result.failure(e)
         }
     }
@@ -202,18 +218,24 @@ class NearbyMeshTransport(
         return _connectedPeerCount.asStateFlow()
     }
 
+    override fun observeDiagnostics(): Flow<MeshDiagnostics> {
+        return _diagnostics.asStateFlow()
+    }
+
     /**
      * Callback for connection lifecycle events.
      */
     private val connectionLifecycleCallback = object : ConnectionLifecycleCallback() {
         override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-            if (lifecycleState == TransportLifecycle.STOPPED) {
+            if (_diagnostics.value.status == MeshTransportStatus.STOPPED) {
                 Log.w(TAG, "Rejecting connection initiated from $endpointId after stop()")
                 connectionsClient.rejectConnection(endpointId)
                 return
             }
 
-            Log.d(TAG, "Connection initiated: $endpointId (${info.endpointName})")
+            val eventMsg = "Connection initiated: $endpointId (${info.endpointName})"
+            Log.d(TAG, eventMsg)
+            updateDiagnostics { it.copy(lastConnectionEvent = eventMsg) }
             
             peerStates[endpointId] = EndpointState.CONNECTING
             peerNodeIds[endpointId] = info.endpointName
@@ -221,37 +243,47 @@ class NearbyMeshTransport(
             // Automatically accept connections from other RSQ nodes.
             connectionsClient.acceptConnection(endpointId, payloadCallback)
                 .addOnFailureListener { e ->
-                    Log.e(TAG, "Failed to accept connection from $endpointId", e)
+                    val failMsg = "Failed to accept connection from $endpointId: ${e.message}"
+                    Log.e(TAG, failMsg, e)
                     peerStates.remove(endpointId)
+                    updateDiagnostics { it.copy(lastError = failMsg) }
                 }
         }
 
         override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
-            if (lifecycleState == TransportLifecycle.STOPPED) {
+            if (_diagnostics.value.status == MeshTransportStatus.STOPPED) {
                 Log.w(TAG, "Ignoring connection result for $endpointId after stop()")
                 connectionsClient.disconnectFromEndpoint(endpointId)
                 return
             }
 
+            val statusMsg = "Code: ${result.status.statusCode} Msg: ${result.status.statusMessage}"
+            
             when (result.status.statusCode) {
                 ConnectionsStatusCodes.STATUS_OK -> {
                     val nodeId = peerNodeIds[endpointId] ?: "unknown_node"
-                    Log.i(TAG, "Successfully connected to node: $nodeId (endpoint: $endpointId)")
+                    val eventMsg = "Connected to node: $nodeId"
+                    Log.i(TAG, eventMsg)
                     peerStates[endpointId] = EndpointState.CONNECTED
+                    updateDiagnostics { it.copy(lastConnectionEvent = eventMsg) }
                     updateConnectedPeerCount()
                 }
                 else -> {
-                    Log.w(TAG, "Connection failed or rejected for $endpointId: ${result.status.statusMessage}")
+                    val eventMsg = "Connection failed: $statusMsg"
+                    Log.w(TAG, "Connection failed or rejected for $endpointId: $statusMsg")
                     peerStates.remove(endpointId)
                     peerNodeIds.remove(endpointId)
+                    updateDiagnostics { it.copy(lastConnectionEvent = eventMsg) }
                 }
             }
         }
 
         override fun onDisconnected(endpointId: String) {
-            Log.i(TAG, "Disconnected from endpoint: $endpointId")
+            val eventMsg = "Disconnected: $endpointId"
+            Log.i(TAG, eventMsg)
             peerStates.remove(endpointId)
             peerNodeIds.remove(endpointId)
+            updateDiagnostics { it.copy(lastConnectionEvent = eventMsg) }
             updateConnectedPeerCount()
         }
     }
@@ -261,9 +293,11 @@ class NearbyMeshTransport(
      */
     private val endpointDiscoveryCallback = object : EndpointDiscoveryCallback() {
         override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
-            if (lifecycleState == TransportLifecycle.STOPPED) return
+            if (_diagnostics.value.status == MeshTransportStatus.STOPPED) return
 
-            Log.d(TAG, "Discovered RSQ endpoint: $endpointId (${info.endpointName})")
+            val eventMsg = "Found: $endpointId (${info.endpointName})"
+            Log.d(TAG, eventMsg)
+            updateDiagnostics { it.copy(lastDiscoveredEndpoint = eventMsg) }
             
             // Check if we are already connected or connecting
             if (peerStates.containsKey(endpointId)) {
@@ -282,9 +316,11 @@ class NearbyMeshTransport(
                 endpointId,
                 connectionLifecycleCallback
             ).addOnFailureListener { e ->
-                Log.e(TAG, "Failed to request connection to $endpointId", e)
+                val failMsg = "Request connection failed for $endpointId: ${e.message}"
+                Log.e(TAG, failMsg, e)
                 peerStates.remove(endpointId)
                 peerNodeIds.remove(endpointId)
+                updateDiagnostics { it.copy(lastError = failMsg) }
             }
         }
 
@@ -338,6 +374,16 @@ class NearbyMeshTransport(
     }
 
     private fun updateConnectedPeerCount() {
-        _connectedPeerCount.value = peerStates.count { it.value == EndpointState.CONNECTED }
+        val count = peerStates.count { it.value == EndpointState.CONNECTED }
+        _connectedPeerCount.value = count
+        updateDiagnostics { it.copy(connectedPeerCount = count) }
+    }
+
+    private fun updateStatus(status: MeshTransportStatus) {
+        updateDiagnostics { it.copy(status = status) }
+    }
+
+    private fun updateDiagnostics(update: (MeshDiagnostics) -> MeshDiagnostics) {
+        _diagnostics.value = update(_diagnostics.value)
     }
 }

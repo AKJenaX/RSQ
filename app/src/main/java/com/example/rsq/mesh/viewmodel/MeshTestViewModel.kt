@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.rsq.data.model.Priority
 import com.example.rsq.mesh.domain.MeshTransport
 import com.example.rsq.mesh.domain.NodeIdentityProvider
+import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.mesh.model.MeshMessage
 import com.example.rsq.mesh.model.MeshMessageType
+import com.example.rsq.mesh.model.MeshTransportStatus
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -20,6 +22,9 @@ class MeshTestViewModel(
     
     val connectedPeerCount: StateFlow<Int> = transport.observeConnectedPeerCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val diagnostics: StateFlow<MeshDiagnostics> = transport.observeDiagnostics()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MeshDiagnostics())
 
     private val _lastReceivedMessage = MutableStateFlow<MeshMessage?>(null)
     val lastReceivedMessage: StateFlow<MeshMessage?> = _lastReceivedMessage.asStateFlow()
@@ -35,13 +40,26 @@ class MeshTestViewModel(
                 _lastReceivedMessage.value = message
             }
         }
+        
+        // Synchronize legacy status message with diagnostic status
+        viewModelScope.launch {
+            diagnostics.map { it.status }.distinctUntilChanged().collect { status ->
+                _statusMessage.value = when (status) {
+                    MeshTransportStatus.STOPPED -> "Stopped"
+                    MeshTransportStatus.STARTING -> "Starting..."
+                    MeshTransportStatus.ADVERTISING -> "Advertising..."
+                    MeshTransportStatus.DISCOVERING -> "Discovering..."
+                    MeshTransportStatus.READY -> "Ready / Running"
+                    MeshTransportStatus.ERROR -> "Error"
+                }
+            }
+        }
     }
 
     fun startMesh() {
         if (isStarted) return
         isStarted = true
         transport.start()
-        _statusMessage.value = "Mesh transport started"
     }
 
     fun sendTestMessage() {

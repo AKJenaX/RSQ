@@ -1,5 +1,6 @@
 package com.example.rsq.mesh.domain
 
+import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.mesh.model.MeshMessage
 import kotlinx.coroutines.flow.Flow
 
@@ -37,4 +38,10 @@ interface MeshTransport {
      * Provides a stream of the number of currently connected peers.
      */
     fun observeConnectedPeerCount(): Flow<Int>
+
+    /**
+     * Provides a stream of diagnostic information about the transport layer.
+     */
+    fun observeDiagnostics(): Flow<MeshDiagnostics>
 }
+

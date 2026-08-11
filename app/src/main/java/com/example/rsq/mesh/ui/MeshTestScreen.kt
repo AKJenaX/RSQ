@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.rsq.mesh.model.MeshTransportStatus
 import com.example.rsq.mesh.viewmodel.MeshTestViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,6 +32,7 @@ fun MeshTestScreen(
     val peerCount by viewModel.connectedPeerCount.collectAsState()
     val lastMessage by viewModel.lastReceivedMessage.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
+    val diagnostics by viewModel.diagnostics.collectAsState()
 
     val context = LocalContext.current
 
@@ -116,7 +118,37 @@ fun MeshTestScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     val displayStatus = if (permissionsGranted) statusMessage else "Nearby permissions required"
-                    Text("Status: $displayStatus", fontWeight = FontWeight.SemiBold, color = if (permissionsGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+                    val statusColor = when {
+                        !permissionsGranted -> MaterialTheme.colorScheme.error
+                        diagnostics.status == MeshTransportStatus.READY -> Color(0xFF388E3C)
+                        diagnostics.status == MeshTransportStatus.ERROR -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.primary
+                    }
+                    Text("Status: $displayStatus", fontWeight = FontWeight.SemiBold, color = statusColor)
+                }
+            }
+
+            // Mesh Diagnostics Section
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Mesh Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    
+                    DiagnosticRow("Transport", diagnostics.status.name)
+                    DiagnosticRow("Advertising", if (diagnostics.isAdvertising) "RUNNING" else "STOPPED")
+                    DiagnosticRow("Discovery", if (diagnostics.isDiscovering) "RUNNING" else "STOPPED")
+                    DiagnosticRow("Connected Peers", diagnostics.connectedPeerCount.toString())
+                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
+                    
+                    DiagnosticRow("Last Endpoint", diagnostics.lastDiscoveredEndpoint ?: "None")
+                    DiagnosticRow("Last Event", diagnostics.lastConnectionEvent ?: "None")
+                    
+                    if (diagnostics.lastError != null) {
+                        Text("Error: ${diagnostics.lastError}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
 
@@ -169,5 +201,16 @@ fun MeshTestScreen(
                 Text("No messages received yet", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
             }
         }
+    }
+}
+
+@Composable
+private fun DiagnosticRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = "$label:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+        Text(text = value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
     }
 }
