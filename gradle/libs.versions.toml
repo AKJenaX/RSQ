@@ -12,6 +12,7 @@ composeBom = "2026.02.01"
 navigationCompose = "2.8.5"
 firebaseBom = "34.0.0"
 kotlinxCoroutinesPlayServices = "1.7.3"
+kotlinxCoroutinesTest = "1.7.3"
 playServicesLocation = "21.3.0"
 playServicesNearby = "19.4.0"
 coilCompose = "2.7.0"
@@ -41,6 +42,7 @@ firebase-auth = { group = "com.google.firebase", name = "firebase-auth" }
 firebase-firestore = { group = "com.google.firebase", name = "firebase-firestore" }
 firebase-storage = { group = "com.google.firebase", name = "firebase-storage" }
 kotlinx-coroutines-play-services = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-play-services", version.ref = "kotlinxCoroutinesPlayServices" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 play-services-nearby = { group = "com.google.android.gms", name = "play-services-nearby", version.ref = "playServicesNearby" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }

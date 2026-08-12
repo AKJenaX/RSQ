@@ -3,6 +3,7 @@ package com.example.rsq.mesh.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rsq.data.model.Priority
+import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.domain.MeshTransport
 import com.example.rsq.mesh.domain.NodeIdentityProvider
 import com.example.rsq.mesh.model.MeshDiagnostics
@@ -15,7 +16,8 @@ import java.util.UUID
 
 class MeshTestViewModel(
     private val transport: MeshTransport,
-    private val identityProvider: NodeIdentityProvider
+    private val identityProvider: NodeIdentityProvider,
+    private val relayEngine: MeshRelayEngine
 ) : ViewModel() {
 
     val nodeId: String = identityProvider.getNodeId()
@@ -36,7 +38,7 @@ class MeshTestViewModel(
 
     init {
         viewModelScope.launch {
-            transport.observeIncomingMessages().collect { message ->
+            relayEngine.processedMessages.collect { message ->
                 _lastReceivedMessage.value = message
             }
         }
@@ -77,7 +79,7 @@ class MeshTestViewModel(
                 ttl = 3
             )
             
-            val result = transport.sendMessage(message)
+            val result = relayEngine.broadcastMessage(message)
             if (result.isSuccess) {
                 _statusMessage.value = "Message transmission initiated"
             } else {

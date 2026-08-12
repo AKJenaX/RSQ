@@ -16,8 +16,10 @@ import com.example.rsq.auth.model.AuthState
 import com.example.rsq.auth.ui.LoginScreen
 import com.example.rsq.auth.ui.RegisterScreen
 import com.example.rsq.auth.viewmodel.AuthViewModel
+import com.example.rsq.mesh.data.LocalMeshMessageRepository
 import com.example.rsq.mesh.data.NearbyMeshTransport
 import com.example.rsq.mesh.data.NodeIdentityRepository
+import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.ui.MeshTestScreen
 import com.example.rsq.mesh.viewmodel.MeshTestViewModel
 import com.example.rsq.reporting.ui.ReportHistoryScreen
@@ -47,7 +49,18 @@ fun AppNavigation() {
     
     // Mesh dependencies for testing
     val meshIdentityProvider = remember { NodeIdentityRepository(context) }
+    val meshMessageRepository = remember { LocalMeshMessageRepository(context) }
     val meshTransport = remember { NearbyMeshTransport(context, meshIdentityProvider) }
+    
+    // Lifecycle-aware Relay Engine
+    val meshRelayEngine = remember {
+        MeshRelayEngine(
+            transport = meshTransport,
+            repository = meshMessageRepository,
+            identityProvider = meshIdentityProvider,
+            scope = authViewModel.internalScope // Use a persistent scope
+        )
+    }
 
     val authState by authViewModel.authState.collectAsState()
 
@@ -176,7 +189,12 @@ fun AppNavigation() {
             val meshViewModel: MeshTestViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        return MeshTestViewModel(meshTransport, meshIdentityProvider) as T
+                        @Suppress("UNCHECKED_CAST")
+                        return MeshTestViewModel(
+                            transport = meshTransport,
+                            identityProvider = meshIdentityProvider,
+                            relayEngine = meshRelayEngine
+                        ) as T
                     }
                 }
             )
