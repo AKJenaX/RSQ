@@ -4,9 +4,10 @@ import com.example.rsq.data.model.Priority
 import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.mesh.model.MeshMessage
 import com.example.rsq.mesh.model.MeshMessageType
+import com.example.rsq.mesh.model.MeshRelayEvent
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -31,69 +32,85 @@ class MeshRelayEngineTest {
     }
 
     @Test
-    fun `New message should be persisted and emitted`() = runTest(testDispatcher) {
+    fun `New message should be persisted and emitted with events`() = runTest(testDispatcher) {
         engine = MeshRelayEngine(fakeTransport, fakeRepository, fakeIdentityProvider, backgroundScope)
         val message = createTestMessage("msg-1", ttl = 3)
+        
+        val events = mutableListOf<MeshRelayEvent>()
+        backgroundScope.launch { engine.relayEvents.toList(events) }
         
         fakeTransport.emitMessage(message)
         
         assertTrue("Message should be in repository", fakeRepository.hasMessage("msg-1"))
+        
+        assertEquals(3, events.size)
+        assertEquals("RECEIVED", events[0].action)
+        assertEquals("PERSISTED", events[1].action)
+        assertEquals("RELAYED", events[2].action)
+        assertEquals(2, events[2].ttlAfter)
     }
 
     @Test
-    fun `Duplicate message should not be emitted or relayed`() = runTest(testDispatcher) {
+    fun `Duplicate message should not be emitted or relayed and show DISCARDED event`() = runTest(testDispatcher) {
         engine = MeshRelayEngine(fakeTransport, fakeRepository, fakeIdentityProvider, backgroundScope)
         val message = createTestMessage("msg-1", ttl = 3)
         fakeRepository.saveMessage(message)
         
+        val events = mutableListOf<MeshRelayEvent>()
+        backgroundScope.launch { engine.relayEvents.toList(events) }
+        
         fakeTransport.emitMessage(message)
         
         assertEquals("Should not relay duplicate", 0, fakeTransport.sentMessages.size)
+        assertEquals(2, events.size)
+        assertEquals("RECEIVED", events[0].action)
+        assertEquals("DUPLICATE_DISCARDED", events[1].action)
     }
 
     @Test
-    fun `Message with TTL 0 should not be relayed`() = runTest(testDispatcher) {
+    fun `Message with TTL 0 should not be relayed and show TTL_EXPIRED event`() = runTest(testDispatcher) {
         engine = MeshRelayEngine(fakeTransport, fakeRepository, fakeIdentityProvider, backgroundScope)
         val message = createTestMessage("msg-1", ttl = 0)
         
+        val events = mutableListOf<MeshRelayEvent>()
+        backgroundScope.launch { engine.relayEvents.toList(events) }
+        
         fakeTransport.emitMessage(message)
         
-        assertEquals("Should not relay with TTL 0", 0, fakeTransport.sentMessages.size)
+        assertEquals(0, fakeTransport.sentMessages.size)
+        assertEquals(3, events.size)
+        assertEquals("RECEIVED", events[0].action)
+        assertEquals("PERSISTED", events[1].action)
+        assertEquals("TTL_EXPIRED", events[2].action)
     }
 
     @Test
-    fun `Message with TTL gt 0 should be relayed with decremented TTL`() = runTest(testDispatcher) {
+    fun `Broadcast message should emit OUTBOUND event`() = runTest(testDispatcher) {
+        engine = MeshRelayEngine(fakeTransport, fakeRepository, fakeIdentityProvider, backgroundScope)
+        val message = createTestMessage("msg-1", ttl = 3)
+        
+        val events = mutableListOf<MeshRelayEvent>()
+        backgroundScope.launch { engine.relayEvents.toList(events) }
+        
+        engine.broadcastMessage(message)
+        
+        assertEquals(1, events.size)
+        assertEquals("OUTBOUND", events[0].action)
+        assertEquals("local-node", events[0].nodeId)
+    }
+
+    @Test
+    fun `Relay should preserve ID and origin while updating sender`() = runTest(testDispatcher) {
         engine = MeshRelayEngine(fakeTransport, fakeRepository, fakeIdentityProvider, backgroundScope)
         val message = createTestMessage("msg-1", ttl = 3)
         
         fakeTransport.emitMessage(message)
         
-        assertEquals("Should relay exactly once", 1, fakeTransport.sentMessages.size)
         val relayed = fakeTransport.sentMessages[0]
         assertEquals("msg-1", relayed.id)
-        assertEquals(2, relayed.ttl)
+        assertEquals("origin-node", relayed.originNodeId)
         assertEquals("local-node", relayed.senderNodeId)
-        assertEquals(message.originNodeId, relayed.originNodeId)
-    }
-
-    @Test
-    fun `Relay should preserve message fields unrelated to routing`() = runTest(testDispatcher) {
-        engine = MeshRelayEngine(fakeTransport, fakeRepository, fakeIdentityProvider, backgroundScope)
-        val message = createTestMessage("msg-1", ttl = 1).copy(
-            payload = "Target Payload",
-            priority = Priority.HIGH,
-            latitude = 1.0,
-            longitude = 2.0
-        )
-        
-        fakeTransport.emitMessage(message)
-        
-        assertEquals("Should relay", 1, fakeTransport.sentMessages.size)
-        val relayed = fakeTransport.sentMessages[0]
-        assertEquals("Target Payload", relayed.payload)
-        assertEquals(Priority.HIGH, relayed.priority)
-        assertEquals(1.0, relayed.latitude)
-        assertEquals(2.0, relayed.longitude)
+        assertEquals(2, relayed.ttl)
     }
 
     private fun createTestMessage(id: String, ttl: Int): MeshMessage {

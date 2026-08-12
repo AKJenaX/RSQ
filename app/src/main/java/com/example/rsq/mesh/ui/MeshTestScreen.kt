@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.rsq.mesh.model.MeshRelayEvent
 import com.example.rsq.mesh.model.MeshTransportStatus
 import com.example.rsq.mesh.viewmodel.MeshTestViewModel
 
@@ -33,6 +34,7 @@ fun MeshTestScreen(
     val lastMessage by viewModel.lastReceivedMessage.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val diagnostics by viewModel.diagnostics.collectAsState()
+    val relayEvents by viewModel.relayEvents.collectAsState()
 
     val context = LocalContext.current
 
@@ -200,6 +202,67 @@ fun MeshTestScreen(
             } else {
                 Text("No messages received yet", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
             }
+
+            HorizontalDivider()
+
+            Text("Relay Trace (Latest 20)", fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+
+            if (relayEvents.isEmpty()) {
+                Text("No relay events recorded", color = Color.Gray, style = MaterialTheme.typography.bodyMedium)
+            } else {
+                relayEvents.forEach { event ->
+                    RelayEventItem(event)
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun RelayEventItem(event: MeshRelayEvent) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = when (event.action) {
+                "RECEIVED" -> Color(0xFFE3F2FD)
+                "RELAYED" -> Color(0xFFE8F5E9)
+                "DUPLICATE_DISCARDED" -> Color(0xFFFFF3E0)
+                "OUTBOUND" -> Color(0xFFF3E5F5)
+                else -> MaterialTheme.colorScheme.surfaceVariant
+            }
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = event.action,
+                    fontWeight = FontWeight.Black,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = when (event.action) {
+                        "RECEIVED" -> Color(0xFF1976D2)
+                        "RELAYED" -> Color(0xFF388E3C)
+                        "DUPLICATE_DISCARDED" -> Color(0xFFF57C00)
+                        "OUTBOUND" -> Color(0xFF7B1FA2)
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+                )
+                Text(
+                    text = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.getDefault()).format(java.util.Date(event.timestamp)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.Gray
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Msg ID: ${event.messageId}", style = MaterialTheme.typography.bodySmall)
+            Text("From: ${event.senderNodeId} | Origin: ${event.originNodeId}", style = MaterialTheme.typography.bodySmall)
+            
+            val ttlText = if (event.ttlAfter != null) "${event.ttlBefore} → ${event.ttlAfter}" else "${event.ttlBefore}"
+            Text("TTL: $ttlText", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
         }
     }
 }

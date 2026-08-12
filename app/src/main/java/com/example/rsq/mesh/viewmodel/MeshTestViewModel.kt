@@ -9,6 +9,7 @@ import com.example.rsq.mesh.domain.NodeIdentityProvider
 import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.mesh.model.MeshMessage
 import com.example.rsq.mesh.model.MeshMessageType
+import com.example.rsq.mesh.model.MeshRelayEvent
 import com.example.rsq.mesh.model.MeshTransportStatus
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -31,6 +32,9 @@ class MeshTestViewModel(
     private val _lastReceivedMessage = MutableStateFlow<MeshMessage?>(null)
     val lastReceivedMessage: StateFlow<MeshMessage?> = _lastReceivedMessage.asStateFlow()
 
+    private val _relayEvents = MutableStateFlow<List<MeshRelayEvent>>(emptyList())
+    val relayEvents: StateFlow<List<MeshRelayEvent>> = _relayEvents.asStateFlow()
+
     private val _statusMessage = MutableStateFlow<String>("Ready")
     val statusMessage: StateFlow<String> = _statusMessage.asStateFlow()
 
@@ -40,6 +44,12 @@ class MeshTestViewModel(
         viewModelScope.launch {
             relayEngine.processedMessages.collect { message ->
                 _lastReceivedMessage.value = message
+            }
+        }
+
+        viewModelScope.launch {
+            relayEngine.relayEvents.collect { event ->
+                _relayEvents.value = (listOf(event) + _relayEvents.value).take(20)
             }
         }
         
