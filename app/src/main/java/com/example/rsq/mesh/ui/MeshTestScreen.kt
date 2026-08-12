@@ -36,57 +36,9 @@ fun MeshTestScreen(
     val diagnostics by viewModel.diagnostics.collectAsState()
     val relayEvents by viewModel.relayEvents.collectAsState()
 
-    val context = LocalContext.current
-
-    // Permissions handling
-    val requiredPermissions = remember {
-        val list = mutableListOf<String>()
-        when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                // Android 12+
-                list.add(Manifest.permission.BLUETOOTH_SCAN)
-                list.add(Manifest.permission.BLUETOOTH_ADVERTISE)
-                list.add(Manifest.permission.BLUETOOTH_CONNECT)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    // Android 13+
-                    list.add(Manifest.permission.NEARBY_WIFI_DEVICES)
-                }
-            }
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> {
-                // Android 10-11
-                list.add(Manifest.permission.ACCESS_FINE_LOCATION)
-            }
-            else -> {
-                // Android 6-9
-                list.add(Manifest.permission.ACCESS_COARSE_LOCATION)
-            }
-        }
-        list
-    }
-
-    var permissionsGranted by remember {
-        mutableStateOf(
-            requiredPermissions.all {
-                ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-            }
-        )
-    }
-
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { results ->
-        permissionsGranted = results.values.all { it }
-        if (permissionsGranted) {
-            viewModel.startMesh()
-        }
-    }
-
+    // MeshTestScreen assumes permissions were granted at the app-level gate.
     LaunchedEffect(Unit) {
-        if (permissionsGranted) {
-            viewModel.startMesh()
-        } else {
-            launcher.launch(requiredPermissions.toTypedArray())
-        }
+        viewModel.startMesh()
     }
 
     Scaffold(
@@ -119,11 +71,10 @@ fun MeshTestScreen(
                     Text("Node ID: $nodeId", style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    val displayStatus = if (permissionsGranted) statusMessage else "Nearby permissions required"
-                    val statusColor = when {
-                        !permissionsGranted -> MaterialTheme.colorScheme.error
-                        diagnostics.status == MeshTransportStatus.READY -> Color(0xFF388E3C)
-                        diagnostics.status == MeshTransportStatus.ERROR -> MaterialTheme.colorScheme.error
+                    val displayStatus = statusMessage
+                    val statusColor = when (diagnostics.status) {
+                        MeshTransportStatus.READY -> Color(0xFF388E3C)
+                        MeshTransportStatus.ERROR -> MaterialTheme.colorScheme.error
                         else -> MaterialTheme.colorScheme.primary
                     }
                     Text("Status: $displayStatus", fontWeight = FontWeight.SemiBold, color = statusColor)

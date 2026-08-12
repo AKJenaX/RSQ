@@ -27,9 +27,11 @@ import com.example.rsq.reporting.ui.ReportSubmissionScreen
 import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.ui.home.VictimHomeScreen
 import com.example.rsq.ui.home.VolunteerHomeScreen
+import com.example.rsq.ui.permission.PermissionScreen
 import com.example.rsq.ui.role.RoleSelectionScreen
 
 sealed class Screen(val route: String) {
+    object Permissions : Screen("permissions")
     object Login : Screen("login")
     object Register : Screen("register")
     object RoleSelection : Screen("role_selection")
@@ -72,8 +74,18 @@ fun AppNavigation() {
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Login.route,
+        startDestination = Screen.Permissions.route,
     ) {
+        composable(Screen.Permissions.route) {
+            PermissionScreen(
+                onPermissionsGranted = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.Permissions.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Login.route) {
             // Observe authState for successful login or existing session
             LaunchedEffect(authState) {
