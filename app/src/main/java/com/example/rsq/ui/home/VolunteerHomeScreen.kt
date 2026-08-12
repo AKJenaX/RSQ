@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.OfflineBolt
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,32 +16,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.rsq.data.model.EmergencyRequest
-import com.example.rsq.data.model.Priority
-import com.example.rsq.ui.theme.RSQTheme
-import com.example.rsq.ui.viewmodel.MessageViewModel
+import com.example.rsq.reporting.model.Report
+import com.example.rsq.reporting.ui.components.SeverityBadge
+import com.example.rsq.reporting.viewmodel.ReportViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VolunteerHomeScreen(
-    messageViewModel: MessageViewModel = viewModel(),
+    reportViewModel: ReportViewModel,
     onSwitchRole: () -> Unit,
 ) {
-    val messages by messageViewModel.messages.collectAsState()
+    val cloudReports by reportViewModel.reports.collectAsState()
+    val meshReports by reportViewModel.meshReports.collectAsState()
     
-    val requests = messages.map { message ->
-        EmergencyRequest(
-            id = message.id,
-            title = message.message,
-            distance = 0.0,
-            priority = message.priority,
-            latitude = message.latitude,
-            longitude = message.longitude,
-        )
+    val allReports = remember(cloudReports, meshReports) {
+        val reportMap = mutableMapOf<String, Report>()
+        meshReports.forEach { reportMap[it.id] = it }
+        cloudReports.forEach { reportMap[it.id] = it }
+        reportMap.values.sortedByDescending { it.timestamp }
     }
 
     Scaffold(
@@ -81,7 +76,7 @@ fun VolunteerHomeScreen(
                 )
             }
 
-            if (requests.isEmpty()) {
+            if (allReports.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("📡", fontSize = 48.sp)
@@ -98,9 +93,9 @@ fun VolunteerHomeScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
-                    items(requests, key = { it.id }) { request ->
-                        EmergencyRequestCard(request) {
-                            Log.d("VolunteerHome", "Clicked request: ${request.title}")
+                    items(allReports, key = { it.id }) { report ->
+                        EmergencyRequestCard(report) {
+                            // Log.d("VolunteerHome", "Clicked request: ${report.title}")
                         }
                     }
                 }
@@ -111,7 +106,7 @@ fun VolunteerHomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EmergencyRequestCard(request: EmergencyRequest, onClick: () -> Unit) {
+fun EmergencyRequestCard(report: Report, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
@@ -127,12 +122,40 @@ fun EmergencyRequestCard(request: EmergencyRequest, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                PriorityBadge(request.priority)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SeverityBadge(report.severity)
+                    if (report.isOffline) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.OfflineBolt,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    "Nearby / Offline",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        }
+                    }
+                }
                 
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 Text(
-                    text = request.title,
+                    text = report.title,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
@@ -148,7 +171,7 @@ fun EmergencyRequestCard(request: EmergencyRequest, onClick: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "${request.distance} km away",
+                        text = if (report.latitude != null) "Coordinates available" else "Location unknown",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -165,36 +188,5 @@ fun EmergencyRequestCard(request: EmergencyRequest, onClick: () -> Unit) {
                 }
             }
         }
-    }
-}
-
-@Composable
-fun PriorityBadge(priority: Priority) {
-    val (color, label) = when (priority) {
-        Priority.HIGH -> Color(0xFFD32F2F) to "HIGH"
-        Priority.MEDIUM -> Color(0xFFFBC02D) to "MEDIUM"
-        Priority.LOW -> Color(0xFF388E3C) to "LOW"
-    }
-
-    Surface(
-        color = color.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(8.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f))
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Black,
-            color = color
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun VolunteerHomeScreenPreview() {
-    RSQTheme {
-        VolunteerHomeScreen(onSwitchRole = {})
     }
 }

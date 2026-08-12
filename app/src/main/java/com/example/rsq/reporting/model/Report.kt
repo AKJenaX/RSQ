@@ -10,5 +10,6 @@ data class Report(
     val timestamp: Long = System.currentTimeMillis(),
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val isOffline: Boolean = false
 )

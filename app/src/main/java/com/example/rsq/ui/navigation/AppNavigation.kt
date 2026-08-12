@@ -22,6 +22,7 @@ import com.example.rsq.mesh.data.NodeIdentityRepository
 import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.ui.MeshTestScreen
 import com.example.rsq.mesh.viewmodel.MeshTestViewModel
+import com.example.rsq.reporting.data.ReportRepository
 import com.example.rsq.reporting.ui.ReportHistoryScreen
 import com.example.rsq.reporting.ui.ReportSubmissionScreen
 import com.example.rsq.reporting.viewmodel.ReportViewModel
@@ -47,7 +48,6 @@ fun AppNavigation() {
     val context = LocalContext.current
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = viewModel()
-    val reportViewModel: ReportViewModel = viewModel()
     
     // Mesh dependencies for testing
     val meshIdentityProvider = remember { NodeIdentityRepository(context) }
@@ -63,6 +63,19 @@ fun AppNavigation() {
             scope = authViewModel.internalScope // Use a persistent scope
         )
     }
+
+    val reportViewModel: ReportViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return ReportViewModel(
+                    repository = ReportRepository(),
+                    relayEngine = meshRelayEngine,
+                    identityProvider = meshIdentityProvider
+                ) as T
+            }
+        }
+    )
 
     val authState by authViewModel.authState.collectAsState()
 
@@ -170,11 +183,14 @@ fun AppNavigation() {
         }
 
         composable(Screen.VolunteerHome.route) {
-            VolunteerHomeScreen {
-                navController.navigate(Screen.RoleSelection.route) {
-                    popUpTo(Screen.RoleSelection.route) { inclusive = true }
+            VolunteerHomeScreen(
+                reportViewModel = reportViewModel,
+                onSwitchRole = {
+                    navController.navigate(Screen.RoleSelection.route) {
+                        popUpTo(Screen.RoleSelection.route) { inclusive = true }
+                    }
                 }
-            }
+            )
         }
 
         composable(Screen.ReportSubmission.route) {

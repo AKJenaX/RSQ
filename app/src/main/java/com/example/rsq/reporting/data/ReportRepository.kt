@@ -7,10 +7,15 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 
-class ReportRepository(
-    private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+open class ReportRepository(
+    private val firestore: FirebaseFirestore? = null
 ) {
-    suspend fun submitReport(report: Report): Result<Unit> {
+    // Lazy initialization to avoid calling getInstance() during unit tests
+    private val db: FirebaseFirestore by lazy { 
+        firestore ?: FirebaseFirestore.getInstance() 
+    }
+
+    open suspend fun submitReport(report: Report): Result<Unit> {
         return try {
             val reportData = hashMapOf(
                 "userId" to report.userId,
@@ -23,18 +28,26 @@ class ReportRepository(
                 "longitude" to report.longitude,
                 "imageUrl" to report.imageUrl
             )
-            firestore.collection("reports")
-                .add(reportData)
-                .await()
+            
+            if (report.id.isNotEmpty()) {
+                db.collection("reports")
+                    .document(report.id)
+                    .set(reportData)
+                    .await()
+            } else {
+                db.collection("reports")
+                    .add(reportData)
+                    .await()
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun getReports(userId: String): Result<List<Report>> {
+    open suspend fun getReports(userId: String): Result<List<Report>> {
         return try {
-            val snapshot = firestore.collection("reports")
+            val snapshot = db.collection("reports")
                 .whereEqualTo("userId", userId)
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .get()
@@ -53,7 +66,7 @@ class ReportRepository(
         }
     }
 
-    suspend fun updateReportStatus(
+    open suspend fun updateReportStatus(
         reportId: String,
         currentStatus: ReportStatus,
         newStatus: ReportStatus
@@ -63,7 +76,7 @@ class ReportRepository(
         }
 
         return try {
-            firestore.collection("reports")
+            db.collection("reports")
                 .document(reportId)
                 .update("status", newStatus.toFirestoreValue())
                 .await()
