@@ -1,25 +1,33 @@
 package com.example.rsq.reporting.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.net.Uri
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rsq.data.model.Priority
 import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.domain.NodeIdentityProvider
 import com.example.rsq.mesh.model.MeshMessage
 import com.example.rsq.mesh.model.MeshMessageType
+import com.example.rsq.reporting.data.LocalReportRepository
 import com.example.rsq.reporting.data.ReportRepository
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.model.ReportState
+import com.example.rsq.reporting.model.SyncStatus
+import com.example.rsq.reporting.sync.ImageStorageManager
+import com.example.rsq.reporting.sync.SyncScheduler
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 class ReportViewModel(
+    application: Application,
     private val repository: ReportRepository,
+    private val localRepository: LocalReportRepository,
     private val relayEngine: MeshRelayEngine? = null,
     private val identityProvider: NodeIdentityProvider? = null
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
     private val _reportState = MutableStateFlow<ReportState>(ReportState.Idle)
     val reportState: StateFlow<ReportState> = _reportState.asStateFlow()
@@ -32,41 +40,55 @@ class ReportViewModel(
 
     init {
         observeMeshTraffic()
+        observeLocalReports()
     }
 
-    fun submitReport(report: Report) {
+    fun submitReport(report: Report, imageUri: Uri? = null) {
         viewModelScope.launch {
             _reportState.value = ReportState.Loading
             
-            // Ensure ID is generated before starting both paths for consistency
-            val finalReport = if (report.id.isBlank()) {
-                report.copy(id = UUID.randomUUID().toString())
-            } else {
-                report
-            }
+            try {
+                // 1. Generate stable ID
+                val reportId = if (report.id.isBlank()) UUID.randomUUID().toString() else report.id
+                
+                // 2. Handle Image: Copy to internal storage for offline durability
+                var localPath: String? = null
+                if (imageUri != null) {
+                    localPath = ImageStorageManager.copyToInternalStorage(getApplication(), imageUri)
+                }
 
-            // 1. Existing Firebase reporting
-            val firebaseResult = repository.submitReport(finalReport)
-            
-            // 2. Mesh broadcast (Resilient offline fallback)
-            val meshResult = try {
-                broadcastViaMesh(finalReport)
+                val finalReport = report.copy(id = reportId)
+
+                // 3. Persist locally FIRST (Durable Offline-First)
+                localRepository.saveReport(finalReport, localPath, SyncStatus.LOCAL_ONLY)
+
+                // 4. Mesh broadcast (Resilient offline fallback)
+                // Fire and forget to avoid blocking UI transition
+                viewModelScope.launch {
+                    broadcastViaMesh(finalReport)
+                }
+
+                // 5. Trigger/Schedule Background Sync
+                // Scheduling failure should not fail the submission if Room save succeeded
+                try {
+                    SyncScheduler.scheduleSync(getApplication())
+                } catch (e: Exception) {
+                    android.util.Log.e("ReportViewModel", "Failed to schedule sync worker", e)
+                }
+
+                // 6. Final UI State: Decoupled from cloud result
+                _reportState.value = ReportState.Success("Report saved locally. Cloud sync pending.")
+                
             } catch (e: Exception) {
-                Result.failure(e)
+                _reportState.value = ReportState.Error(e.message ?: "Failed to save report locally")
             }
+        }
+    }
 
-            when {
-                firebaseResult.isSuccess -> {
-                    _reportState.value = ReportState.Success("Report submitted successfully")
-                }
-                meshResult?.isSuccess == true -> {
-                    _reportState.value = ReportState.Success("Offline Mesh broadcast successful. Cloud sync pending.")
-                }
-                else -> {
-                    _reportState.value = ReportState.Error(
-                        firebaseResult.exceptionOrNull()?.message ?: "Failed to submit report"
-                    )
-                }
+    private fun observeLocalReports() {
+        viewModelScope.launch {
+            localRepository.observeAllReports().collect { localReports ->
+                _reports.value = localReports
             }
         }
     }

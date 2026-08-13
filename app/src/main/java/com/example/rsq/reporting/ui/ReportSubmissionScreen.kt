@@ -432,9 +432,9 @@ fun ReportSubmissionScreen(
                                     timestamp = System.currentTimeMillis(),
                                     latitude = locationState.latitude,
                                     longitude = locationState.longitude,
-                                    imageUrl = uploadedImageUrl
+                                    imageUrl = null // Will be populated by SyncManager
                                 )
-                                viewModel.submitReport(report)
+                                viewModel.submitReport(report, selectedImageUri)
                             }
                         }
                     }

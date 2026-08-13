@@ -22,7 +22,9 @@ import com.example.rsq.mesh.data.NodeIdentityRepository
 import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.ui.MeshTestScreen
 import com.example.rsq.mesh.viewmodel.MeshTestViewModel
+import com.example.rsq.reporting.data.LocalReportRepository
 import com.example.rsq.reporting.data.ReportRepository
+import com.example.rsq.reporting.data.local.LocalReportDatabase
 import com.example.rsq.reporting.ui.ReportHistoryScreen
 import com.example.rsq.reporting.ui.ReportSubmissionScreen
 import com.example.rsq.reporting.viewmodel.ReportViewModel
@@ -64,12 +66,17 @@ fun AppNavigation() {
         )
     }
 
+    val localReportDatabase = remember { LocalReportDatabase.getDatabase(context) }
+    val localReportRepository = remember { LocalReportRepository(localReportDatabase.reportDao()) }
+
     val reportViewModel: ReportViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
                 return ReportViewModel(
+                    application = context.applicationContext as android.app.Application,
                     repository = ReportRepository(),
+                    localRepository = localReportRepository,
                     relayEngine = meshRelayEngine,
                     identityProvider = meshIdentityProvider
                 ) as T
