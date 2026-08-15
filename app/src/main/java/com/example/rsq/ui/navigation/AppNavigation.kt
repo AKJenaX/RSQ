@@ -37,6 +37,7 @@ fun AppNavigation() {
                 when (role) {
                     "VICTIM" -> navController.navigate(Screen.VictimHome.route)
                     "VOLUNTEER" -> navController.navigate(Screen.VolunteerHome.route)
+                    "AUTHORITY" -> navController.navigate(Screen.AuthorityDashboard.route)
                 }
             }
         }

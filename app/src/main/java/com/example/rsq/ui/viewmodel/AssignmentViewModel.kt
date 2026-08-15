@@ -3,9 +3,9 @@ package com.example.rsq.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rsq.data.model.Assignment
+import com.example.rsq.data.model.AssignmentStatus
 import com.example.rsq.data.repository.AssignmentRepository
 import com.example.rsq.data.repository.AssignmentRepositoryImpl
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -23,7 +23,6 @@ class AssignmentViewModel(
     fun loadData() {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
-            delay(1500)
             repository.getAssignments().collect { list ->
                 if (list.isEmpty()) {
                     _uiState.value = UiState.Empty
@@ -35,14 +34,26 @@ class AssignmentViewModel(
     }
 
     fun acceptAssignment(id: String) {
-        println("Accepted assignment $id")
+        viewModelScope.launch {
+            repository.updateAssignmentStatus(id, AssignmentStatus.ASSIGNED)
+        }
     }
 
-    fun rejectAssignment(id: String) {
-        println("Rejected assignment $id")
+    fun startResponse(id: String) {
+        viewModelScope.launch {
+            repository.updateAssignmentStatus(id, AssignmentStatus.IN_PROGRESS)
+        }
     }
 
     fun completeAssignment(id: String) {
-        println("Completed assignment $id")
+        viewModelScope.launch {
+            repository.updateAssignmentStatus(id, AssignmentStatus.RESOLVED)
+        }
+    }
+
+    fun rejectAssignment(id: String) {
+        viewModelScope.launch {
+            repository.updateAssignmentStatus(id, AssignmentStatus.AVAILABLE)
+        }
     }
 }

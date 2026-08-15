@@ -2,42 +2,51 @@ package com.example.rsq.data.repository
 
 import com.example.rsq.data.model.Notification
 import com.example.rsq.data.model.NotificationType
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.*
 
 class NotificationRepositoryImpl : NotificationRepository {
-    override fun getNotifications(): Flow<List<Notification>> = flowOf(
-        listOf(
-            Notification(
-                id = "NT-101",
-                title = "New SOS Alert",
-                message = "CRITICAL: Multiple victims reported trapped after Earthquake at North Ridge Apartments.",
-                timestamp = "Just Now",
-                type = NotificationType.SOS_ALERT
-            ),
-            Notification(
-                id = "NT-102",
-                title = "Volunteer Assigned",
-                message = "Lead Volunteer Alex Rivera has been assigned to the Flood Rescue mission at Riverside.",
-                timestamp = "15 mins ago",
-                type = NotificationType.ASSIGNMENT_RECEIVED
-            ),
-            Notification(
-                id = "NT-103",
-                title = "Assignment Completed",
-                message = "The Medical Aid mission at St. Jude Center has been successfully completed.",
-                timestamp = "1 hour ago",
-                type = NotificationType.ASSIGNMENT_COMPLETED,
-                isRead = true
-            ),
-            Notification(
-                id = "NT-104",
-                title = "Donation Received",
-                message = "Generous contribution of $5,000.00 received from Global Relief Org for disaster recovery.",
-                timestamp = "2 hours ago",
-                type = NotificationType.DONATION_RECEIVED,
-                isRead = true
+    companion object {
+        private val _notifications = MutableStateFlow<List<Notification>>(
+            listOf(
+                Notification(
+                    id = "NT-001",
+                    title = "Critical Alert: Earthquake",
+                    message = "A magnitude 6.8 earthquake has been reported in North Ridge. Immediate response requested.",
+                    timestamp = "10 mins ago",
+                    type = NotificationType.SOS_ALERT,
+                    isRead = false
+                ),
+                Notification(
+                    id = "NT-002",
+                    title = "New Mission Assigned",
+                    message = "You have been assigned to mission ASGN-2024-05 (Flood Rescue).",
+                    timestamp = "1 hour ago",
+                    type = NotificationType.ASSIGNMENT_RECEIVED,
+                    isRead = true
+                )
             )
         )
-    )
+    }
+
+    override fun getNotifications(): Flow<List<Notification>> = _notifications.asStateFlow()
+
+    override fun getUnreadCount(): Flow<Int> = _notifications.map { list ->
+        list.count { !it.isRead }
+    }
+
+    override suspend fun markAsRead(id: String) {
+        _notifications.update { list ->
+            list.map { if (it.id == id) it.copy(isRead = true) else it }
+        }
+    }
+
+    override suspend fun addNotification(notification: Notification) {
+        _notifications.update { listOf(notification) + it }
+    }
+
+    override suspend fun markAllAsRead() {
+        _notifications.update { list ->
+            list.map { it.copy(isRead = true) }
+        }
+    }
 }

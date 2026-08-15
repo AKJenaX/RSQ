@@ -6,9 +6,10 @@ import com.example.rsq.data.model.Donation
 import com.example.rsq.data.model.DonationSummary
 import com.example.rsq.data.repository.DonationRepository
 import com.example.rsq.data.repository.DonationRepositoryImpl
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 class DonationViewModel(
     private val repository: DonationRepository = DonationRepositoryImpl()
@@ -24,7 +25,6 @@ class DonationViewModel(
     fun loadData() {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
-            delay(1500)
             
             combine(
                 repository.getDonationSummary(),
@@ -32,8 +32,26 @@ class DonationViewModel(
             ) { summary, donations ->
                 summary to donations
             }.collect { (summary, donations) ->
-                _uiState.value = UiState.Success(summary to donations)
+                if (donations.isEmpty() && summary.totalAmount == 0.0) {
+                    _uiState.value = UiState.Empty
+                } else {
+                    _uiState.value = UiState.Success(summary to donations)
+                }
             }
+        }
+    }
+
+    fun makeDonation(amount: Double, donorName: String = "Anonymous") {
+        viewModelScope.launch {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            val newDonation = Donation(
+                id = "D-${System.currentTimeMillis().toString().takeLast(4)}",
+                donorName = donorName,
+                amount = amount,
+                date = sdf.format(Date()),
+                status = "Completed"
+            )
+            repository.addDonation(newDonation)
         }
     }
 }

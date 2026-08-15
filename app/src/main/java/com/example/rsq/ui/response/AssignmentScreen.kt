@@ -18,12 +18,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rsq.data.model.Assignment
+import com.example.rsq.data.model.AssignmentStatus
 import com.example.rsq.data.model.Priority
 import com.example.rsq.ui.viewmodel.AssignmentViewModel
 import com.example.rsq.ui.viewmodel.UiState
-import com.example.rsq.ui.volunteer.LoadingView
-import com.example.rsq.ui.volunteer.ErrorView
-import com.example.rsq.ui.dashboard.EmptyStateView
+import com.example.rsq.ui.common.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,7 +70,8 @@ fun AssignmentScreen(
                                 assignment = assignment,
                                 onAccept = { viewModel.acceptAssignment(assignment.id) },
                                 onReject = { viewModel.rejectAssignment(assignment.id) },
-                                onComplete = { viewModel.completeAssignment(assignment.id) }
+                                onComplete = { viewModel.completeAssignment(assignment.id) },
+                                onStart = { viewModel.startResponse(assignment.id) }
                             )
                         }
                     }
@@ -128,7 +128,8 @@ fun MissionDetailCard(
     assignment: Assignment,
     onAccept: () -> Unit,
     onReject: () -> Unit,
-    onComplete: () -> Unit
+    onComplete: () -> Unit,
+    onStart: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -154,7 +155,16 @@ fun MissionDetailCard(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                MissionPriorityBadge(assignment.priority)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RSQStatusBadge(assignment.status.name, color = when(assignment.status) {
+                        AssignmentStatus.AVAILABLE -> Color.Gray
+                        AssignmentStatus.ASSIGNED -> Color(0xFF1976D2)
+                        AssignmentStatus.IN_PROGRESS -> Color(0xFFFBC02D)
+                        AssignmentStatus.RESOLVED -> Color(0xFF388E3C)
+                    })
+                    Spacer(modifier = Modifier.width(8.dp))
+                    MissionPriorityBadge(assignment.priority)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -191,41 +201,66 @@ fun MissionDetailCard(
             Spacer(modifier = Modifier.height(24.dp))
 
             // Action row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onReject,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD32F2F)),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.3f))
-                ) {
-                    Text("Reject", fontWeight = FontWeight.Bold)
+            when (assignment.status) {
+                AssignmentStatus.AVAILABLE -> {
+                    Button(
+                        onClick = onAccept,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
+                    ) {
+                        Text("Accept Mission", fontWeight = FontWeight.Bold)
+                    }
                 }
+                AssignmentStatus.ASSIGNED -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onReject,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD32F2F)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD32F2F).copy(alpha = 0.3f))
+                        ) {
+                            Text("Reject", fontWeight = FontWeight.Bold)
+                        }
 
-                Button(
-                    onClick = onAccept,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2))
-                ) {
-                    Text("Accept", fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = onStart,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFBC02D))
+                        ) {
+                            Text("Start Response", fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+                    }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = onComplete,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Mark as Completed", fontWeight = FontWeight.Black)
+                AssignmentStatus.IN_PROGRESS -> {
+                    Button(
+                        onClick = onComplete,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Mark as Resolved", fontWeight = FontWeight.Black)
+                    }
+                }
+                AssignmentStatus.RESOLVED -> {
+                    OutlinedButton(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(Icons.Default.Verified, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Mission Resolved", fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }

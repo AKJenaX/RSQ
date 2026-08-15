@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.rsq.data.model.Notification
 import com.example.rsq.data.repository.NotificationRepository
 import com.example.rsq.data.repository.NotificationRepositoryImpl
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -23,7 +22,6 @@ class NotificationViewModel(
     fun loadData() {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
-            delay(1500)
             repository.getNotifications().collect { list ->
                 if (list.isEmpty()) {
                     _uiState.value = UiState.Empty
@@ -35,6 +33,14 @@ class NotificationViewModel(
     }
 
     fun markAsRead(id: String) {
-        println("Marked notification $id as read")
+        viewModelScope.launch {
+            repository.markAsRead(id)
+        }
+    }
+
+    fun markAllAsRead() {
+        viewModelScope.launch {
+            repository.markAllAsRead()
+        }
     }
 }

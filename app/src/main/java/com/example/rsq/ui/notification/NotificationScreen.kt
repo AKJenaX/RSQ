@@ -22,8 +22,8 @@ import com.example.rsq.data.model.Notification
 import com.example.rsq.data.model.NotificationType
 import com.example.rsq.ui.viewmodel.NotificationViewModel
 import com.example.rsq.ui.viewmodel.UiState
-import com.example.rsq.ui.volunteer.LoadingView
-import com.example.rsq.ui.volunteer.ErrorView
+import com.example.rsq.ui.common.LoadingView
+import com.example.rsq.ui.common.ErrorView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +43,7 @@ fun NotificationScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { }) {
+                    IconButton(onClick = { viewModel.markAllAsRead() }) {
                         Icon(Icons.Default.DoneAll, contentDescription = "Mark All Read")
                     }
                 },

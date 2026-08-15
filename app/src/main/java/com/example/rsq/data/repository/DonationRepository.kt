@@ -7,4 +7,5 @@ import kotlinx.coroutines.flow.Flow
 interface DonationRepository {
     fun getRecentDonations(): Flow<List<Donation>>
     fun getDonationSummary(): Flow<DonationSummary>
+    suspend fun addDonation(donation: Donation)
 }

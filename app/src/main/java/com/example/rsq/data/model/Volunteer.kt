@@ -8,11 +8,3 @@ data class Volunteer(
     val activeAssignments: Int,
     val completedAssignments: Int
 )
-
-data class VolunteerAssignment(
-    val reportId: String,
-    val disasterType: String,
-    val location: String,
-    val priority: Priority,
-    val status: String
-)

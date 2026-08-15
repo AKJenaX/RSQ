@@ -64,7 +64,11 @@ fun DonationScreen(
                         contentPadding = PaddingValues(16.dp)
                     ) {
                         item {
-                            EnhancedTotalCard(summary.totalAmount, summary.currency)
+                            EnhancedTotalCard(
+                                amount = summary.totalAmount, 
+                                currency = summary.currency,
+                                onDonate = { viewModel.makeDonation(100.0) }
+                            )
                         }
 
                         item {
@@ -95,7 +99,7 @@ fun DonationScreen(
 }
 
 @Composable
-fun EnhancedTotalCard(amount: Double, currency: String) {
+fun EnhancedTotalCard(amount: Double, currency: String, onDonate: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(32.dp),
@@ -144,7 +148,7 @@ fun EnhancedTotalCard(amount: Double, currency: String) {
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
-                    onClick = { },
+                    onClick = onDonate,
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF1976D2)),
                     shape = RoundedCornerShape(12.dp)
                 ) {

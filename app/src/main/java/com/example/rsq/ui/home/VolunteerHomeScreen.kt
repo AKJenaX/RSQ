@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,16 +46,16 @@ fun VolunteerHomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("RSQ Volunteer", fontWeight = FontWeight.Bold) },
+                title = { Text("Nearby Requests", fontWeight = FontWeight.Bold) },
                 actions = {
                     TextButton(onClick = onSwitchRole) {
                         Icon(
-                            imageVector = Icons.Default.Refresh,
+                            imageVector = Icons.Default.Dashboard,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(4.dp))
-                        Text("Switch Role")
+                        Text("Dashboard")
                     }
                 }
             )

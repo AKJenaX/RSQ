@@ -18,7 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rsq.data.model.Volunteer
-import com.example.rsq.data.model.VolunteerAssignment
+import com.example.rsq.data.model.Assignment
+import com.example.rsq.data.model.AssignmentStatus
 import com.example.rsq.ui.common.*
 import com.example.rsq.ui.viewmodel.UiState
 import com.example.rsq.ui.viewmodel.VolunteerViewModel
@@ -44,7 +45,12 @@ fun VolunteerDashboardScreen(
                 },
                 actions = {
                     IconButton(onClick = onNavigateToNotifications) {
-                        BadgedBox(badge = { Badge() }) {
+                        val unreadCount = (uiState as? UiState.Success)?.data?.unreadNotifications ?: 0
+                        BadgedBox(badge = { 
+                            if (unreadCount > 0) {
+                                Badge { Text(unreadCount.toString()) } 
+                            }
+                        }) {
                             Icon(Icons.Default.Notifications, contentDescription = "Notifications")
                         }
                     }
@@ -65,10 +71,10 @@ fun VolunteerDashboardScreen(
                 )
                 is UiState.Error -> ErrorView(state.message) { viewModel.loadData() }
                 is UiState.Success -> {
-                    val (volunteer, assignments) = state.data
+                    val data = state.data
                     VolunteerContent(
-                        volunteer = volunteer,
-                        assignments = assignments,
+                        volunteer = data.volunteer,
+                        assignments = data.assignments,
                         onNavigateToAssignments = onNavigateToAssignments,
                         onAcceptAssignment = { viewModel.acceptAssignment(it) }
                     )
@@ -81,7 +87,7 @@ fun VolunteerDashboardScreen(
 @Composable
 private fun VolunteerContent(
     volunteer: Volunteer,
-    assignments: List<VolunteerAssignment>,
+    assignments: List<Assignment>,
     onNavigateToAssignments: () -> Unit,
     onAcceptAssignment: (String) -> Unit
 ) {
@@ -119,7 +125,7 @@ private fun VolunteerContent(
         items(assignments) { assignment ->
             AssignmentCard(
                 assignment = assignment,
-                onAccept = { onAcceptAssignment(assignment.reportId) }
+                onAccept = { onAcceptAssignment(assignment.id) }
             )
         }
     }
@@ -181,7 +187,7 @@ private fun SummaryGrid(data: Volunteer) {
 }
 
 @Composable
-private fun AssignmentCard(assignment: VolunteerAssignment, onAccept: () -> Unit) {
+private fun AssignmentCard(assignment: Assignment, onAccept: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
@@ -197,7 +203,7 @@ private fun AssignmentCard(assignment: VolunteerAssignment, onAccept: () -> Unit
             ) {
                 Column {
                     Text(
-                        text = assignment.reportId,
+                        text = assignment.id,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -237,7 +243,7 @@ private fun AssignmentCard(assignment: VolunteerAssignment, onAccept: () -> Unit
             }
 
             Spacer(modifier = Modifier.height(20.dp))
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(modifier = Modifier.height(16.dp))
 
             Row(
@@ -252,14 +258,19 @@ private fun AssignmentCard(assignment: VolunteerAssignment, onAccept: () -> Unit
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        text = assignment.status,
+                        text = assignment.status.name,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
-                        color = if (assignment.status == "Active") Color(0xFF1976D2) else MaterialTheme.colorScheme.onSurface
+                        color = when(assignment.status) {
+                            AssignmentStatus.IN_PROGRESS -> Color(0xFFFBC02D)
+                            AssignmentStatus.ASSIGNED -> Color(0xFF1976D2)
+                            AssignmentStatus.RESOLVED -> Color(0xFF388E3C)
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
                     )
                 }
 
-                if (assignment.status == "Pending") {
+                if (assignment.status == AssignmentStatus.AVAILABLE) {
                     Button(
                         onClick = onAccept,
                         shape = RoundedCornerShape(12.dp),

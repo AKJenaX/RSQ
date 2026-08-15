@@ -1,12 +1,13 @@
 package com.example.rsq.data.repository
 
-import com.example.rsq.data.model.Priority
 import com.example.rsq.data.model.Volunteer
-import com.example.rsq.data.model.VolunteerAssignment
+import com.example.rsq.data.model.Assignment
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
-class VolunteerRepositoryImpl : VolunteerRepository {
+class VolunteerRepositoryImpl(
+    private val assignmentRepository: AssignmentRepository = AssignmentRepositoryImpl()
+) : VolunteerRepository {
     override fun getVolunteerData(): Flow<Volunteer> = flowOf(
         Volunteer(
             id = "VOL-882",
@@ -18,36 +19,14 @@ class VolunteerRepositoryImpl : VolunteerRepository {
         )
     )
 
-    override fun getAssignments(): Flow<List<VolunteerAssignment>> = flowOf(
+    override fun getAssignments(): Flow<List<Assignment>> = assignmentRepository.getAssignments()
+
+    override fun getAllVolunteers(): Flow<List<Volunteer>> = flowOf(
         listOf(
-            VolunteerAssignment(
-                reportId = "EQ-701",
-                disasterType = "Earthquake Rescue",
-                location = "North Ridge Apartments, Sector 7",
-                priority = Priority.HIGH,
-                status = "Pending"
-            ),
-            VolunteerAssignment(
-                reportId = "FL-322",
-                disasterType = "Flood Rescue",
-                location = "Lowland Plains, Riverside Drive",
-                priority = Priority.HIGH,
-                status = "Pending"
-            ),
-            VolunteerAssignment(
-                reportId = "FE-105",
-                disasterType = "Fire Emergency",
-                location = "Downtown Commercial Hub",
-                priority = Priority.MEDIUM,
-                status = "Active"
-            ),
-            VolunteerAssignment(
-                reportId = "MD-904",
-                disasterType = "Medical Aid",
-                location = "St. Jude Community Center",
-                priority = Priority.LOW,
-                status = "Pending"
-            )
+            Volunteer("VOL-882", "Alex Rivera", 42, 3, 1, 38),
+            Volunteer("VOL-001", "Sarah Wilson", 12, 1, 0, 11),
+            Volunteer("VOL-002", "Mike Johnson", 25, 2, 1, 22),
+            Volunteer("VOL-003", "Elena Rodriguez", 5, 0, 0, 5)
         )
     )
 }
