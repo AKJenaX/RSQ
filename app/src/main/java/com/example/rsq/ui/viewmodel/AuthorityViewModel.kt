@@ -2,13 +2,11 @@ package com.example.rsq.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.rsq.data.model.AuthorityDashboardStats
-import com.example.rsq.data.model.RecentReport
-import com.example.rsq.data.model.Volunteer
-import com.example.rsq.data.model.Assignment
+import com.example.rsq.data.model.*
 import com.example.rsq.data.repository.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class AuthorityViewModel(
     private val assignmentRepository: AssignmentRepository = AssignmentRepositoryImpl(),
@@ -51,9 +49,20 @@ class AuthorityViewModel(
         }
     }
 
-    fun assignVolunteer(assignmentId: String, volunteer: Volunteer) {
+    fun assignVolunteer(reportId: String, volunteer: Volunteer) {
         viewModelScope.launch {
-            assignmentRepository.assignVolunteer(assignmentId, volunteer.id, volunteer.name)
+            assignmentRepository.assignVolunteer(reportId, volunteer.id, volunteer.name)
+            
+            // Create notification for the volunteer
+            val notification = Notification(
+                id = "NT-${UUID.randomUUID()}",
+                title = "New Mission Assigned",
+                message = "You have been assigned to mission for report $reportId.",
+                timestamp = "Just now",
+                type = NotificationType.ASSIGNMENT_RECEIVED,
+                isRead = false
+            )
+            notificationRepository.addNotification(notification)
         }
     }
 }

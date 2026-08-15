@@ -70,17 +70,37 @@ class AssignmentRepositoryImpl : AssignmentRepository {
         }
     }
 
-    override suspend fun assignVolunteer(assignmentId: String, volunteerId: String, volunteerName: String) {
+    override suspend fun assignVolunteer(reportId: String, volunteerId: String, volunteerName: String) {
         _assignments.update { list ->
-            list.map { assignment ->
-                if (assignment.id == assignmentId) {
-                    assignment.copy(
-                        volunteerId = volunteerId,
-                        volunteerName = volunteerName,
-                        status = AssignmentStatus.ASSIGNED,
-                        updatedAt = System.currentTimeMillis()
-                    )
-                } else assignment
+            val existingIndex = list.indexOfFirst { it.reportId == reportId }
+            if (existingIndex != -1) {
+                list.mapIndexed { index, assignment ->
+                    if (index == existingIndex) {
+                        assignment.copy(
+                            volunteerId = volunteerId,
+                            volunteerName = volunteerName,
+                            status = AssignmentStatus.ASSIGNED,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                    } else assignment
+                }
+            } else {
+                // If it doesn't exist, we'd need more info from the report to create a full Assignment object
+                // For now, let's assume we create a skeleton one or we ensure reports have AVAILABLE assignments
+                list + Assignment(
+                    id = "ASGN-$reportId",
+                    reportId = reportId,
+                    volunteerId = volunteerId,
+                    volunteerName = volunteerName,
+                    victimName = "Victim", // Placeholder
+                    disasterType = "SOS Alert", // Placeholder
+                    location = "Unknown", // Placeholder
+                    status = AssignmentStatus.ASSIGNED,
+                    priority = Priority.HIGH,
+                    assignedTime = "Just now",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
             }
         }
     }

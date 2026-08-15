@@ -4,6 +4,7 @@ import com.example.rsq.data.model.Volunteer
 import com.example.rsq.data.model.Assignment
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 class VolunteerRepositoryImpl(
     private val assignmentRepository: AssignmentRepository = AssignmentRepositoryImpl()
@@ -19,7 +20,9 @@ class VolunteerRepositoryImpl(
         )
     )
 
-    override fun getAssignments(): Flow<List<Assignment>> = assignmentRepository.getAssignments()
+    override fun getAssignments(): Flow<List<Assignment>> = assignmentRepository.getAssignments().map { list ->
+        list.filter { it.volunteerId == "VOL-882" || it.volunteerId == null }
+    }
 
     override fun getAllVolunteers(): Flow<List<Volunteer>> = flowOf(
         listOf(

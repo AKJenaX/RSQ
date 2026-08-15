@@ -37,7 +37,7 @@ fun AuthorityDashboardScreen(
     onNavigateToDonations: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedAssignmentId: String? by remember { mutableStateOf(null) }
+    var selectedReportId: String? by remember { mutableStateOf(null) }
     var showVolunteerPicker by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -112,21 +112,19 @@ fun AuthorityDashboardScreen(
                                 report = report,
                                 assignment = assignment,
                                 onAssignClick = {
-                                    if (assignment != null) {
-                                        selectedAssignmentId = assignment.id
-                                        showVolunteerPicker = true
-                                    }
+                                    selectedReportId = report.id
+                                    showVolunteerPicker = true
                                 }
                             )
                         }
                     }
 
-                    if (showVolunteerPicker && selectedAssignmentId != null) {
+                    if (showVolunteerPicker && selectedReportId != null) {
                         VolunteerPicker(
                             volunteers = data.volunteers,
                             onDismiss = { showVolunteerPicker = false },
                             onVolunteerSelected = { volunteer ->
-                                viewModel.assignVolunteer(selectedAssignmentId!!, volunteer)
+                                viewModel.assignVolunteer(selectedReportId!!, volunteer)
                                 showVolunteerPicker = false
                             }
                         )
