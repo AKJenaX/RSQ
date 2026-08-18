@@ -31,7 +31,12 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
 
     open suspend fun getPendingReports(): List<ReportEntity> {
         return reportDao.getReportsBySyncStatus(SyncStatus.LOCAL_ONLY) +
-               reportDao.getReportsBySyncStatus(SyncStatus.FAILED)
+               reportDao.getReportsBySyncStatus(SyncStatus.FAILED) +
+               reportDao.getReportsBySyncStatus(SyncStatus.SYNCING)
+    }
+
+    open suspend fun getReportById(id: String): ReportEntity? {
+        return reportDao.getReportById(id)
     }
 
     open suspend fun updateSyncStatus(id: String, status: SyncStatus) {

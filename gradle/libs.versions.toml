@@ -7,6 +7,7 @@ espressoCore = "3.5.1"
 lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
 kotlin = "2.2.10"
+ksp = "2.2.10-2.0.2"
 kotlinxSerialization = "1.8.0"
 composeBom = "2026.02.01"
 navigationCompose = "2.8.5"
@@ -17,7 +18,7 @@ playServicesLocation = "21.3.0"
 playServicesNearby = "19.4.0"
 coilCompose = "2.7.0"
 desugarJdkLibs = "2.1.5"
-room = "2.6.1"
+room = "2.8.4"
 work = "2.9.0"
 mockitoKotlin = "5.2.1"
 
@@ -61,4 +62,4 @@ desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", ver
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

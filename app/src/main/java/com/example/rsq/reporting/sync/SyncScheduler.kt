@@ -28,7 +28,7 @@ object SyncScheduler {
 
         WorkManager.getInstance(context).enqueueUniqueWork(
             UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.REPLACE, // Restart sync if triggered again
+            ExistingWorkPolicy.APPEND_OR_REPLACE, // Ensure subsequent reports trigger another sync without killing active one
             syncRequest
         )
     }

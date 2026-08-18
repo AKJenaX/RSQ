@@ -35,7 +35,6 @@ import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.location.viewmodel.LocationViewModel
 import com.example.rsq.location.data.LocationRepository
-import com.example.rsq.storage.data.StorageRepository
 import com.example.rsq.ai.data.SeverityEngine
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.launch
@@ -54,14 +53,10 @@ fun ReportSubmissionScreen(
     val locationViewModel: LocationViewModel = remember { LocationViewModel(locationRepository) }
     val locationState by locationViewModel.locationState.collectAsState()
 
-    val storageRepository = remember { StorageRepository() }
-
     var title by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     var validationError by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
-    var isUploadingImage by remember { mutableStateOf(false) }
-    var uploadError by remember { mutableStateOf<String?>(null) }
 
     // Live AI Prediction state
     val aiPrediction by remember(title, description) {
@@ -108,17 +103,6 @@ fun ReportSubmissionScreen(
     }
 
     val reportState by viewModel.reportState.collectAsState()
-
-    // Handle form reset and ViewModel state reset on success
-    LaunchedEffect(reportState) {
-        if (reportState is ReportState.Success) {
-            title = ""
-            description = ""
-            selectedImageUri = null
-            uploadError = null
-            viewModel.resetState()
-        }
-    }
 
     Scaffold(
         topBar = {
@@ -225,7 +209,6 @@ fun ReportSubmissionScreen(
                         onValueChange = { 
                             title = it 
                             validationError = null
-                            uploadError = null
                         },
                         label = { Text("Title") },
                         placeholder = { Text("e.g., Medical Emergency, Fire") },
@@ -240,7 +223,6 @@ fun ReportSubmissionScreen(
                         onValueChange = { 
                             description = it 
                             validationError = null
-                            uploadError = null
                         },
                         label = { Text("Description") },
                         placeholder = { Text("Describe the situation in detail...") },
@@ -404,23 +386,6 @@ fun ReportSubmissionScreen(
                         description.isBlank() -> validationError = "Description is required"
                         else -> {
                             coroutineScope.launch {
-                                var uploadedImageUrl: String? = null
-                                
-                                if (selectedImageUri != null) {
-                                    isUploadingImage = true
-                                    uploadError = null
-                                    
-                                    val uploadResult = storageRepository.uploadImage(selectedImageUri!!)
-                                    isUploadingImage = false
-                                    
-                                    if (uploadResult.isSuccess) {
-                                        uploadedImageUrl = uploadResult.getOrNull()
-                                    } else {
-                                        uploadError = uploadResult.exceptionOrNull()?.message ?: "Image upload failed"
-                                        return@launch
-                                    }
-                                }
-
                                 val prediction = SeverityEngine.predictSeverity(title, description)
 
                                 val report = Report(
@@ -443,30 +408,30 @@ fun ReportSubmissionScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 shape = MaterialTheme.shapes.medium,
-                enabled = reportState !is ReportState.Loading && !isUploadingImage
+                enabled = reportState !is ReportState.Loading
             ) {
-                if (reportState is ReportState.Loading || isUploadingImage) {
+                if (reportState is ReportState.Loading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(if (isUploadingImage) "Uploading Image..." else "Submitting...")
+                    Text("Submitting...")
                 } else {
                     Text("Submit Report", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
             // Status feedback
-            val statusMessage = validationError ?: uploadError ?: when (val state = reportState) {
+            val statusMessage = validationError ?: when (val state = reportState) {
                 is ReportState.Success -> state.message
                 is ReportState.Error -> state.message
                 else -> null
             }
 
             if (statusMessage != null) {
-                val isError = validationError != null || uploadError != null || reportState is ReportState.Error
+                val isError = validationError != null || reportState is ReportState.Error
                 Surface(
                     modifier = Modifier
                         .padding(top = 24.dp)
