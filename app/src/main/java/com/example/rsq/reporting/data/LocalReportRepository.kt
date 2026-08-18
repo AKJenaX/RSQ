@@ -24,7 +24,10 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
             imageUrl = report.imageUrl,
             localImagePath = localPath,
             isOffline = report.isOffline,
-            syncStatus = syncStatus
+            syncStatus = syncStatus,
+            aiScore = report.aiScore,
+            detectedHazards = report.detectedHazards,
+            recommendedResources = report.recommendedResources
         )
         reportDao.insertReport(entity)
     }
@@ -65,7 +68,10 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
             latitude = latitude,
             longitude = longitude,
             imageUrl = imageUrl,
-            isOffline = isOffline
+            isOffline = isOffline,
+            aiScore = aiScore,
+            detectedHazards = detectedHazards,
+            recommendedResources = recommendedResources
         )
     }
 }

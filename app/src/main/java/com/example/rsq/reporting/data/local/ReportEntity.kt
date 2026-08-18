@@ -18,5 +18,8 @@ data class ReportEntity(
     val imageUrl: String?,
     val localImagePath: String?,
     val isOffline: Boolean,
-    val syncStatus: SyncStatus
+    val syncStatus: SyncStatus,
+    val aiScore: Float,
+    val detectedHazards: List<String>,
+    val recommendedResources: List<String>
 )

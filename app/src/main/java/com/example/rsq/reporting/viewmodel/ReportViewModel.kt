@@ -17,6 +17,7 @@ import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.model.SyncStatus
 import com.example.rsq.reporting.sync.ImageStorageManager
 import com.example.rsq.reporting.sync.SyncScheduler
+import com.example.rsq.ai.data.SeverityEngine
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -57,9 +58,22 @@ class ReportViewModel(
                     localPath = ImageStorageManager.copyToInternalStorage(getApplication(), imageUri)
                 }
 
-                val finalReport = report.copy(id = reportId)
+                // 3. Multimodal AI Analysis
+                val aiResult = SeverityEngine.analyzeMultimodal(
+                    title = report.title,
+                    description = report.description,
+                    imageUri = imageUri
+                )
 
-                // 3. Persist locally FIRST (Durable Offline-First)
+                val finalReport = report.copy(
+                    id = reportId,
+                    severity = aiResult.severity,
+                    aiScore = aiResult.finalScore,
+                    detectedHazards = aiResult.detectedHazards.map { it.name },
+                    recommendedResources = aiResult.recommendedResources
+                )
+
+                // 4. Persist locally FIRST (Durable Offline-First)
                 localRepository.saveReport(finalReport, localPath, SyncStatus.LOCAL_ONLY)
 
                 // 4. Mesh broadcast (Resilient offline fallback)

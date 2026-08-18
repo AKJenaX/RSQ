@@ -107,6 +107,9 @@ class ReportSyncManagerTest {
         imageUrl = null,
         localImagePath = null,
         isOffline = false,
-        syncStatus = status
+        syncStatus = status,
+        aiScore = 0f,
+        detectedHazards = emptyList(),
+        recommendedResources = emptyList()
     )
 }

@@ -16,6 +16,10 @@ open class ReportRepository(
     }
 
     open suspend fun submitReport(report: Report): Result<Unit> {
+        if (report.id.isBlank()) {
+            return Result.failure(IllegalArgumentException("Report ID must not be empty for Firestore submission. RSQ requires a stable UUID."))
+        }
+        
         return try {
             val reportData = hashMapOf(
                 "userId" to report.userId,
@@ -26,19 +30,16 @@ open class ReportRepository(
                 "timestamp" to report.timestamp,
                 "latitude" to report.latitude,
                 "longitude" to report.longitude,
-                "imageUrl" to report.imageUrl
+                "imageUrl" to report.imageUrl,
+                "aiScore" to report.aiScore,
+                "detectedHazards" to report.detectedHazards,
+                "recommendedResources" to report.recommendedResources
             )
             
-            if (report.id.isNotEmpty()) {
-                db.collection("reports")
-                    .document(report.id)
-                    .set(reportData)
-                    .await()
-            } else {
-                db.collection("reports")
-                    .add(reportData)
-                    .await()
-            }
+            db.collection("reports")
+                .document(report.id)
+                .set(reportData)
+                .await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

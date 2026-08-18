@@ -1,53 +1,51 @@
 package com.example.rsq.ai.data
 
-import com.example.rsq.ai.model.SeverityPrediction
-import com.example.rsq.ai.model.SeverityRules
+import android.net.Uri
+import com.example.rsq.ai.domain.ImageSeverityAnalyzer
+import com.example.rsq.ai.domain.TextSeverityAnalyzer
+import com.example.rsq.ai.model.*
 
 /**
- * A rule-based AI engine that predicts the severity of an emergency report
- * based on keywords found in the title and description.
+ * A multimodal AI engine that predicts the severity of an emergency report.
+ * Refactored to delegate to text and image analyzers.
  */
 object SeverityEngine {
 
+    private val textAnalyzer: TextSeverityAnalyzer = KeywordTextAnalyzer()
+    private val imageAnalyzer: ImageSeverityAnalyzer = LiteRTImageAnalyzer()
+
     /**
-     * Predicts severity based on keyword matching from [SeverityRules].
+     * Predicts severity based on title and description.
+     * Maintains backward compatibility with the existing UI.
      */
     fun predictSeverity(title: String, description: String): SeverityPrediction {
-        val content = "${title} ${description}".lowercase()
+        val textResult = textAnalyzer.analyze(title, description)
+        
+        // Since no image is provided in this legacy call, fuse with unavailable image result
+        val fusedResult = SeverityFusionEngine.fuse(textResult, ImageAnalysisResult.unavailable())
 
-        return when {
-            containsAny(content, SeverityRules.CRITICAL_KEYWORDS) -> {
-                SeverityPrediction(
-                    severity = "CRITICAL",
-                    confidence = 0.95f,
-                    reason = "High-risk keywords related to large-scale disasters or fires detected."
-                )
-            }
-            containsAny(content, SeverityRules.HIGH_KEYWORDS) -> {
-                SeverityPrediction(
-                    severity = "HIGH",
-                    confidence = 0.90f,
-                    reason = "Keywords indicating life-threatening injuries or accidents detected."
-                )
-            }
-            containsAny(content, SeverityRules.MEDIUM_KEYWORDS) -> {
-                SeverityPrediction(
-                    severity = "MEDIUM",
-                    confidence = 0.80f,
-                    reason = "Keywords related to medical needs or infrastructure issues detected."
-                )
-            }
-            else -> {
-                SeverityPrediction(
-                    severity = "LOW",
-                    confidence = 0.60f,
-                    reason = "No high-risk keywords detected."
-                )
-            }
-        }
+        return SeverityPrediction(
+            severity = fusedResult.severity,
+            confidence = fusedResult.confidence,
+            reason = fusedResult.reason
+        )
     }
 
-    private fun containsAny(content: String, keywords: List<String>): Boolean {
-        return keywords.any { content.contains(it) }
+    /**
+     * Performs a full multimodal analysis.
+     */
+    suspend fun analyzeMultimodal(
+        title: String,
+        description: String,
+        imageUri: Uri?
+    ): SeverityAnalysisResult {
+        val textResult = textAnalyzer.analyze(title, description)
+        val imageResult = if (imageUri != null) {
+            imageAnalyzer.analyze(imageUri)
+        } else {
+            ImageAnalysisResult.unavailable("No image provided for analysis.")
+        }
+
+        return SeverityFusionEngine.fuse(textResult, imageResult)
     }
 }
