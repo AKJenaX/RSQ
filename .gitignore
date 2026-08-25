@@ -16,3 +16,6 @@ local.properties
 # Firebase
 app/google-services.json
 .idea/planningMode.xml
+.venv-ml/
+kaggle_dataset/
+ml/data/

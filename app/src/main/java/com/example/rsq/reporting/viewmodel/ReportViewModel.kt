@@ -2,6 +2,7 @@ package com.example.rsq.reporting.viewmodel
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rsq.data.model.Priority
@@ -45,6 +46,10 @@ class ReportViewModel(
     }
 
     fun submitReport(report: Report, imageUri: Uri? = null) {
+        Log.d(
+            "ReportViewModel",
+            "submitReport() CALLED - title=${report.title}, imageUri=$imageUri"
+        )
         viewModelScope.launch {
             _reportState.value = ReportState.Loading
             
@@ -59,11 +64,16 @@ class ReportViewModel(
                 }
 
                 // 3. Multimodal AI Analysis
+                // Use the stable local file path for analysis to ensure it's accessible
+                val aiAnalysisUri = if (localPath != null) Uri.fromFile(java.io.File(localPath)) else null
+                
                 val aiResult = SeverityEngine.analyzeMultimodal(
                     title = report.title,
                     description = report.description,
-                    imageUri = imageUri
+                    imageUri = aiAnalysisUri
                 )
+
+                Log.d("ReportViewModel", "Multimodal AI result: severity=${aiResult.severity}, finalScore=${aiResult.finalScore}, imageScore=${aiResult.imageScore}, textScore=${aiResult.textScore}, hazards=${aiResult.detectedHazards}, resources=${aiResult.recommendedResources}")
 
                 val finalReport = report.copy(
                     id = reportId,
@@ -73,7 +83,10 @@ class ReportViewModel(
                     recommendedResources = aiResult.recommendedResources
                 )
 
+                Log.d("ReportViewModel", "Constructed finalReport: id=${finalReport.id}, severity=${finalReport.severity}, aiScore=${finalReport.aiScore}, hazards=${finalReport.detectedHazards}, resources=${finalReport.recommendedResources}")
+
                 // 4. Persist locally FIRST (Durable Offline-First)
+                Log.d("ReportViewModel", "Saving final report: severity=${finalReport.severity}, aiScore=${finalReport.aiScore}")
                 localRepository.saveReport(finalReport, localPath, SyncStatus.LOCAL_ONLY)
 
                 // 4. Mesh broadcast (Resilient offline fallback)

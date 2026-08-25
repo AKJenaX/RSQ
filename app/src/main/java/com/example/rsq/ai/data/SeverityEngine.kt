@@ -1,5 +1,6 @@
 package com.example.rsq.ai.data
 
+import android.content.Context
 import android.net.Uri
 import com.example.rsq.ai.domain.ImageSeverityAnalyzer
 import com.example.rsq.ai.domain.TextSeverityAnalyzer
@@ -12,7 +13,16 @@ import com.example.rsq.ai.model.*
 object SeverityEngine {
 
     private val textAnalyzer: TextSeverityAnalyzer = KeywordTextAnalyzer()
-    private val imageAnalyzer: ImageSeverityAnalyzer = LiteRTImageAnalyzer()
+    private var imageAnalyzer: ImageSeverityAnalyzer? = null
+
+    /**
+     * Initialize the engine with context to setup ONNX.
+     */
+    fun initialize(context: Context) {
+        if (imageAnalyzer == null) {
+            imageAnalyzer = OnnxImageAnalyzer(context.applicationContext)
+        }
+    }
 
     /**
      * Predicts severity based on title and description.
@@ -40,10 +50,11 @@ object SeverityEngine {
         imageUri: Uri?
     ): SeverityAnalysisResult {
         val textResult = textAnalyzer.analyze(title, description)
-        val imageResult = if (imageUri != null) {
-            imageAnalyzer.analyze(imageUri)
+        val imageResult = if (imageUri != null && imageAnalyzer != null) {
+            imageAnalyzer!!.analyze(imageUri)
         } else {
-            ImageAnalysisResult.unavailable("No image provided for analysis.")
+            val reason = if (imageUri == null) "No image provided" else "Image analyzer not initialized"
+            ImageAnalysisResult.unavailable(reason)
         }
 
         return SeverityFusionEngine.fuse(textResult, imageResult)
