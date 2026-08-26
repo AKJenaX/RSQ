@@ -116,6 +116,31 @@ fun RoleSelectionScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            OutlinedButton(
+                onClick = {
+                    Log.d("RoleSelection", "Selected role: AUTHORITY")
+                    onRoleSelected("AUTHORITY")
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp),
+                shape = RoundedCornerShape(24.dp),
+                border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(text = "🛡️", fontSize = 24.sp, modifier = Modifier.padding(end = 12.dp))
+                    Column {
+                        Text(text = "Authority Mode", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text(text = "Manage incidents and resources", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
             
             Spacer(modifier = Modifier.height(32.dp))
 

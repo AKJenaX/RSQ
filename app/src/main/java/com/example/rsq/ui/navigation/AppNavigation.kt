@@ -28,21 +28,34 @@ import com.example.rsq.reporting.data.local.LocalReportDatabase
 import com.example.rsq.reporting.ui.ReportHistoryScreen
 import com.example.rsq.reporting.ui.ReportSubmissionScreen
 import com.example.rsq.reporting.viewmodel.ReportViewModel
+import com.example.rsq.ui.dashboard.AuthorityDashboardScreen
+import com.example.rsq.ui.donation.DonationScreen
 import com.example.rsq.ui.home.VictimHomeScreen
 import com.example.rsq.ui.home.VolunteerHomeScreen
+import com.example.rsq.ui.notification.NotificationScreen
 import com.example.rsq.ui.permission.PermissionScreen
+import com.example.rsq.ui.response.AssignmentScreen
 import com.example.rsq.ui.role.RoleSelectionScreen
+import com.example.rsq.ui.volunteer.VolunteerDashboardScreen
 
 sealed class Screen(val route: String) {
     object Permissions : Screen("permissions")
     object Login : Screen("login")
     object Register : Screen("register")
     object RoleSelection : Screen("role_selection")
+
     object VictimHome : Screen("victim_home")
     object VolunteerHome : Screen("volunteer_home")
+
     object ReportSubmission : Screen("report_submission")
     object ReportHistory : Screen("report_history")
     object MeshTest : Screen("mesh_test")
+
+    object VolunteerDashboard : Screen("volunteer_dashboard")
+    object AuthorityDashboard : Screen("authority_dashboard")
+    object Assignment : Screen("assignment_screen")
+    object Donation : Screen("donation_screen")
+    object Notification : Screen("notification_screen")
 }
 
 @Composable
@@ -50,28 +63,45 @@ fun AppNavigation() {
     val context = LocalContext.current
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = viewModel()
-    
-    // Mesh dependencies for testing
-    val meshIdentityProvider = remember { NodeIdentityRepository(context) }
-    val meshMessageRepository = remember { LocalMeshMessageRepository(context) }
-    val meshTransport = remember { NearbyMeshTransport(context, meshIdentityProvider) }
-    
-    // Lifecycle-aware Relay Engine
+
+    // Mesh dependencies
+    val meshIdentityProvider = remember {
+        NodeIdentityRepository(context)
+    }
+
+    val meshMessageRepository = remember {
+        LocalMeshMessageRepository(context)
+    }
+
+    val meshTransport = remember {
+        NearbyMeshTransport(context, meshIdentityProvider)
+    }
+
+    // Lifecycle-aware relay engine
     val meshRelayEngine = remember {
         MeshRelayEngine(
             transport = meshTransport,
             repository = meshMessageRepository,
             identityProvider = meshIdentityProvider,
-            scope = authViewModel.internalScope // Use a persistent scope
+            scope = authViewModel.internalScope
         )
     }
 
-    val localReportDatabase = remember { LocalReportDatabase.getDatabase(context) }
-    val localReportRepository = remember { LocalReportRepository(localReportDatabase.reportDao()) }
+    // Local report database/repository
+    val localReportDatabase = remember {
+        LocalReportDatabase.getDatabase(context)
+    }
 
+    val localReportRepository = remember {
+        LocalReportRepository(localReportDatabase.reportDao())
+    }
+
+    // Report ViewModel
     val reportViewModel: ReportViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            override fun <T : ViewModel> create(
+                modelClass: Class<T>
+            ): T {
                 @Suppress("UNCHECKED_CAST")
                 return ReportViewModel(
                     application = context.applicationContext as android.app.Application,
@@ -86,7 +116,6 @@ fun AppNavigation() {
 
     val authState by authViewModel.authState.collectAsState()
 
-    // TODO: Introduce AuthGate/Splash route for cleaner startup authentication flow.
     // Session check on app launch
     LaunchedEffect(Unit) {
         authViewModel.checkSession()
@@ -94,32 +123,49 @@ fun AppNavigation() {
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Permissions.route,
+        startDestination = Screen.Permissions.route
     ) {
+
+        // ---------------------------------------------------------
+        // Permissions
+        // ---------------------------------------------------------
+
         composable(Screen.Permissions.route) {
             PermissionScreen(
                 onPermissionsGranted = {
                     navController.navigate(Screen.Login.route) {
-                        popUpTo(Screen.Permissions.route) { inclusive = true }
+                        popUpTo(Screen.Permissions.route) {
+                            inclusive = true
+                        }
                     }
                 }
             )
         }
 
+        // ---------------------------------------------------------
+        // Authentication
+        // ---------------------------------------------------------
+
         composable(Screen.Login.route) {
-            // Observe authState for successful login or existing session
             LaunchedEffect(authState) {
                 when (val state = authState) {
                     is AuthState.Success -> {
-                        if (state.message == "Login successful" || state.message == "Session restored") {
+                        if (
+                            state.message == "Login successful" ||
+                            state.message == "Session restored"
+                        ) {
                             navController.navigate(Screen.RoleSelection.route) {
-                                popUpTo(Screen.Login.route) { inclusive = true }
+                                popUpTo(Screen.Login.route) {
+                                    inclusive = true
+                                }
                             }
                         }
                     }
+
                     else -> Unit
                 }
             }
+
             LoginScreen(
                 viewModel = authViewModel,
                 onNavigateToRegister = {
@@ -129,21 +175,24 @@ fun AppNavigation() {
         }
 
         composable(Screen.Register.route) {
-            // Navigate back to login after successful registration
             LaunchedEffect(authState) {
                 when (val state = authState) {
                     is AuthState.Success -> {
                         if (state.message == "Registration successful") {
                             navController.navigate(Screen.Login.route) {
-                                popUpTo(Screen.Register.route) { inclusive = true }
+                                popUpTo(Screen.Register.route) {
+                                    inclusive = true
+                                }
                             }
-                            // Reset state so LoginScreen doesn't immediately navigate to RoleSelection
+
                             authViewModel.resetState()
                         }
                     }
+
                     else -> Unit
                 }
             }
+
             RegisterScreen(
                 viewModel = authViewModel,
                 onNavigateBackToLogin = {
@@ -152,53 +201,90 @@ fun AppNavigation() {
             )
         }
 
+        // ---------------------------------------------------------
+        // Role Selection
+        // ---------------------------------------------------------
+
         composable(Screen.RoleSelection.route) {
-            // Navigate to login if user logs out
+
+            // Handle logout
             LaunchedEffect(authState) {
                 if (authState is AuthState.LoggedOut) {
                     navController.navigate(Screen.Login.route) {
-                        popUpTo(Screen.RoleSelection.route) { inclusive = true }
+                        popUpTo(Screen.RoleSelection.route) {
+                            inclusive = true
+                        }
                     }
                 }
             }
+
             RoleSelectionScreen(
-                onLogout = { authViewModel.logout() },
-                onDebugMesh = { navController.navigate(Screen.MeshTest.route) },
+                onLogout = {
+                    authViewModel.logout()
+                },
+
+                onDebugMesh = {
+                    navController.navigate(Screen.MeshTest.route)
+                },
+
                 onRoleSelected = { role ->
                     when (role) {
-                        "VICTIM" -> navController.navigate(Screen.VictimHome.route)
-                        "VOLUNTEER" -> navController.navigate(Screen.VolunteerHome.route)
+                        "VICTIM" -> {
+                            navController.navigate(Screen.VictimHome.route)
+                        }
+
+                        "VOLUNTEER" -> {
+                            navController.navigate(Screen.VolunteerHome.route)
+                        }
+
+                        "AUTHORITY" -> {
+                            navController.navigate(Screen.AuthorityDashboard.route)
+                        }
                     }
                 }
             )
         }
+
+        // ---------------------------------------------------------
+        // Victim
+        // ---------------------------------------------------------
 
         composable(Screen.VictimHome.route) {
             VictimHomeScreen(
                 onTriggerSOS = {
                     navController.navigate(Screen.ReportSubmission.route)
                 },
+
                 onViewHistory = {
                     navController.navigate(Screen.ReportHistory.route)
                 },
+
                 onSwitchRole = {
                     navController.navigate(Screen.RoleSelection.route) {
-                        popUpTo(Screen.RoleSelection.route) { inclusive = true }
+                        popUpTo(Screen.RoleSelection.route) {
+                            inclusive = true
+                        }
                     }
                 }
             )
         }
 
+        // ---------------------------------------------------------
+        // Volunteer
+        // ---------------------------------------------------------
+
         composable(Screen.VolunteerHome.route) {
             VolunteerHomeScreen(
                 reportViewModel = reportViewModel,
-                onSwitchRole = {
-                    navController.navigate(Screen.RoleSelection.route) {
-                        popUpTo(Screen.RoleSelection.route) { inclusive = true }
-                    }
+                onOpenDashboard = {
+                    navController.navigate(Screen.VolunteerDashboard.route)
                 }
             )
         }
+
+        // ---------------------------------------------------------
+        // Reporting
+        // ---------------------------------------------------------
 
         composable(Screen.ReportSubmission.route) {
             ReportSubmissionScreen(
@@ -220,10 +306,16 @@ fun AppNavigation() {
             )
         }
 
+        // ---------------------------------------------------------
+        // Mesh testing
+        // ---------------------------------------------------------
+
         composable(Screen.MeshTest.route) {
             val meshViewModel: MeshTestViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    override fun <T : ViewModel> create(
+                        modelClass: Class<T>
+                    ): T {
                         @Suppress("UNCHECKED_CAST")
                         return MeshTestViewModel(
                             transport = meshTransport,
@@ -233,9 +325,86 @@ fun AppNavigation() {
                     }
                 }
             )
+
             MeshTestScreen(
                 viewModel = meshViewModel,
                 onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // ---------------------------------------------------------
+        // Volunteer Dashboard
+        // ---------------------------------------------------------
+
+        composable(Screen.VolunteerDashboard.route) {
+            VolunteerDashboardScreen(
+                onBack = {
+                    navController.popBackStack()
+                },
+
+                onNavigateToNotifications = {
+                    navController.navigate(Screen.Notification.route)
+                },
+
+                onNavigateToAssignments = {
+                    navController.navigate(Screen.Assignment.route)
+                }
+            )
+        }
+
+        // ---------------------------------------------------------
+        // Authority Dashboard
+        // ---------------------------------------------------------
+
+        composable(Screen.AuthorityDashboard.route) {
+            AuthorityDashboardScreen(
+                onBack = {
+                    navController.popBackStack()
+                },
+
+                onNavigateToNotifications = {
+                    navController.navigate(Screen.Notification.route)
+                },
+
+                onNavigateToDonations = {
+                    navController.navigate(Screen.Donation.route)
+                }
+            )
+        }
+
+        // ---------------------------------------------------------
+        // Assignments
+        // ---------------------------------------------------------
+
+        composable(Screen.Assignment.route) {
+            AssignmentScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // ---------------------------------------------------------
+        // Donations
+        // ---------------------------------------------------------
+
+        composable(Screen.Donation.route) {
+            DonationScreen(
+                onBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // ---------------------------------------------------------
+        // Notifications
+        // ---------------------------------------------------------
+
+        composable(Screen.Notification.route) {
+            NotificationScreen(
+                onBack = {
                     navController.popBackStack()
                 }
             )
