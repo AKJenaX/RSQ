@@ -1,0 +1,25 @@
+package com.example.rsq.reporting.data.local
+
+import androidx.room.TypeConverter
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+
+/**
+ * Room TypeConverters for AI-related data structures.
+ */
+class AiConverters {
+
+    @TypeConverter
+    fun fromStringList(value: List<String>): String {
+        return Json.encodeToString(value)
+    }
+
+    @TypeConverter
+    fun toStringList(value: String): List<String> {
+        return try {
+            Json.decodeFromString(value)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+}
