@@ -3,6 +3,7 @@ package com.example.rsq.reporting.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
@@ -151,7 +152,25 @@ fun ReportItemCard(report: Report) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            if (report.imageUrl != null) {
+            // Multi-image display (Part 22)
+            if (report.imageUrls.isNotEmpty()) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(120.dp)
+                ) {
+                    items(report.imageUrls) { url ->
+                        AsyncImage(
+                            model = url,
+                            contentDescription = "Report image",
+                            modifier = Modifier
+                                .width(160.dp)
+                                .fillMaxHeight()
+                                .clip(MaterialTheme.shapes.medium),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            } else if (report.imageUrl != null) {
                 AsyncImage(
                     model = report.imageUrl,
                     contentDescription = "Report image",
@@ -166,7 +185,7 @@ fun ReportItemCard(report: Report) {
             Spacer(modifier = Modifier.height(8.dp))
             LocationDetails(report.latitude, report.longitude)
 
-            Divider(modifier = Modifier.padding(vertical = 4.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

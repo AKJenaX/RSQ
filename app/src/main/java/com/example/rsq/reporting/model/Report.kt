@@ -11,6 +11,7 @@ data class Report(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val imageUrl: String? = null,
+    val imageUrls: List<String> = emptyList(),
     val isOffline: Boolean = false,
     val aiScore: Float = 0f,
     val detectedHazards: List<String> = emptyList(),

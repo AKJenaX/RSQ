@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * Represents a packet of information traveling through the mesh network.
- * 
+ *
  * @property id Unique identifier for the message.
  * @property senderNodeId ID of the node that most recently transmitted this message.
  * @property originNodeId ID of the node that originally created this message.

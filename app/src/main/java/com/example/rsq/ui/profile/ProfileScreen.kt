@@ -15,9 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.rsq.R
 import com.example.rsq.auth.viewmodel.AuthViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,10 +37,10 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Profile", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.my_profile), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -101,7 +103,7 @@ fun ProfileScreen(
 
             // Actions
             Text(
-                text = "Account Activity",
+                text = stringResource(R.string.account_activity),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
@@ -109,21 +111,21 @@ fun ProfileScreen(
 
             ProfileActionButton(
                 icon = Icons.Default.History,
-                label = "Emergency History",
+                label = stringResource(R.string.emergency_history),
                 onClick = onNavigateToHistory
             )
             
             if (userProfile?.role == "VOLUNTEER") {
                 ProfileActionButton(
                     icon = Icons.Default.Assignment,
-                    label = "My Assignments",
+                    label = stringResource(R.string.my_assignments),
                     onClick = onNavigateToAssignments
                 )
             }
 
             ProfileActionButton(
                 icon = Icons.Default.Notifications,
-                label = "Alert Notifications",
+                label = stringResource(R.string.alert_notifications),
                 onClick = onNavigateToNotifications
             )
 
@@ -138,7 +140,7 @@ fun ProfileScreen(
             ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null)
                 Spacer(modifier = Modifier.width(12.dp))
-                Text("Logout Session", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.logout_session), fontWeight = FontWeight.Bold)
             }
         }
     }

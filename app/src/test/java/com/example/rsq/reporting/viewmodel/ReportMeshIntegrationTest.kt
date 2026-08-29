@@ -77,10 +77,10 @@ class ReportMeshIntegrationTest {
         assertEquals(1, fakeMeshTransport.sentMessages.size)
         assertEquals("rep-1", fakeMeshTransport.sentMessages[0].id)
         assertEquals("local-node", fakeMeshTransport.sentMessages[0].senderNodeId)
-        
+
         // 3. Verify Firestore was NOT called by the ViewModel
         assertFalse("Firestore should NOT be called directly by ViewModel", fakeReportRepository.submitCalled)
-        
+
         // 4. Verify UI state is success
         val state = viewModel.reportState.value as ReportState.Success
         assertEquals("Report saved locally. Cloud sync pending.", state.message)
@@ -91,20 +91,20 @@ class ReportMeshIntegrationTest {
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
         viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
         val report = Report(userId = "u1", title = "T", description = "D")
-        
+
         viewModel.submitReport(report)
         advanceUntilIdle()
-        
+
         val savedId = fakeLocalRepository.savedReports[0].id
         assertTrue("Generated ID should be a UUID", savedId.isNotEmpty())
-        
+
         // Verify UUID format
         try {
             java.util.UUID.fromString(savedId)
         } catch (e: Exception) {
             org.junit.Assert.fail("Generated ID is not a valid UUID: $savedId")
         }
-        
+
         assertEquals("Mesh should use same generated ID", savedId, fakeMeshTransport.sentMessages[0].id)
     }
 
@@ -113,10 +113,10 @@ class ReportMeshIntegrationTest {
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
         viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
         val report = Report(id = "preserved-id", userId = "u1", title = "T", description = "D")
-        
+
         viewModel.submitReport(report)
         advanceUntilIdle()
-        
+
         assertEquals("preserved-id", fakeLocalRepository.savedReports[0].id)
         assertEquals("preserved-id", fakeMeshTransport.sentMessages[0].id)
     }
@@ -126,12 +126,12 @@ class ReportMeshIntegrationTest {
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
         viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
         fakeMeshTransport.shouldFail = true
-        
+
         val report = createTestReport("res-mesh-fail")
-        
+
         viewModel.submitReport(report)
         advanceUntilIdle()
-        
+
         val state = viewModel.reportState.value as ReportState.Success
         assertEquals("Report saved locally. Cloud sync pending.", state.message)
         assertEquals(1, fakeLocalRepository.savedReports.size)
@@ -139,19 +139,19 @@ class ReportMeshIntegrationTest {
 
     @Test
     fun `SyncScheduler failure should not prevent success state if Room save succeeded`() = runTest(testDispatcher) {
-        // We can simulate an object throw by using a special "fail mode" in our fake scheduler logic if we had one, 
+        // We can simulate an object throw by using a special "fail mode" in our fake scheduler logic if we had one,
         // but here we check the ViewModel's safe try-catch.
-        // We'll use a mocked Application that throws on scheduleSync if it were a mockable dependency, 
+        // We'll use a mocked Application that throws on scheduleSync if it were a mockable dependency,
         // but since it's an object we depend on the implemented try-catch.
-        
+
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
         viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
-        
+
         val report = createTestReport("res-sched-fail")
-        
+
         viewModel.submitReport(report)
         advanceUntilIdle()
-        
+
         // If it didn't crash and returned success, it means the try-catch worked
         val state = viewModel.reportState.value as ReportState.Success
         assertEquals("Report saved locally. Cloud sync pending.", state.message)

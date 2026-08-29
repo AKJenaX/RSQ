@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
 class MessageViewModel : ViewModel() {
-    
+
     val messages: StateFlow<List<SOSMessage>> = MessageRepository.messages
         .stateIn(
             scope = viewModelScope,

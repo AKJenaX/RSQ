@@ -22,7 +22,7 @@ class MeshTestViewModel(
 ) : ViewModel() {
 
     val nodeId: String = identityProvider.getNodeId()
-    
+
     val connectedPeerCount: StateFlow<Int> = transport.observeConnectedPeerCount()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
@@ -52,7 +52,7 @@ class MeshTestViewModel(
                 _relayEvents.value = (listOf(event) + _relayEvents.value).take(20)
             }
         }
-        
+
         // Synchronize legacy status message with diagnostic status
         viewModelScope.launch {
             diagnostics.map { it.status }.distinctUntilChanged().collect { status ->
@@ -88,7 +88,7 @@ class MeshTestViewModel(
                 payload = "RSQ mesh connectivity test",
                 ttl = 3
             )
-            
+
             val result = relayEngine.broadcastMessage(message)
             if (result.isSuccess) {
                 _statusMessage.value = "Message transmission initiated"

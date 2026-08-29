@@ -15,12 +15,12 @@ class NodeIdentityRepository(context: Context) : NodeIdentityProvider {
 
     override fun getNodeId(): String {
         var nodeId = prefs.getString(KEY_NODE_ID, null)
-        
+
         if (nodeId == null) {
             nodeId = generateNewNodeId()
             persistNodeId(nodeId)
         }
-        
+
         return nodeId
     }
 

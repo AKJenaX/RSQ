@@ -43,7 +43,7 @@ class OnnxImageAnalyzer(
             Log.d("OnnxImageAnalyzer", "Loading model asset: $modelFileName")
             val modelBytes = context.assets.open(modelFileName).readBytes()
             ortSession = ortEnv.createSession(modelBytes)
-            
+
             ortSession?.let { session ->
                 Log.d("OnnxImageAnalyzer", "ONNX session initialization succeeded")
                 Log.d("OnnxImageAnalyzer", "Input names: ${session.inputNames}")
@@ -88,7 +88,7 @@ class OnnxImageAnalyzer(
                     // 5. Softmax & Max Probability
                     val probabilities = softmax(logits)
                     Log.d("OnnxImageAnalyzer", "Softmax probabilities: ${probabilities.contentToString()}")
-                    
+
                     val maxIndex = probabilities.indices.maxByOrNull { probabilities[it] } ?: 0
                     val confidence = probabilities[maxIndex]
                     Log.d("OnnxImageAnalyzer", "maxIndex=$maxIndex, confidence=$confidence")

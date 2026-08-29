@@ -70,7 +70,7 @@ fun MeshTestScreen(
                     Text("Device Info", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                     Text("Node ID: $nodeId", style = MaterialTheme.typography.bodySmall)
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     val displayStatus = statusMessage
                     val statusColor = when (diagnostics.status) {
                         MeshTransportStatus.READY -> Color(0xFF388E3C)
@@ -88,17 +88,17 @@ fun MeshTestScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("Mesh Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-                    
+
                     DiagnosticRow("Transport", diagnostics.status.name)
                     DiagnosticRow("Advertising", if (diagnostics.isAdvertising) "RUNNING" else "STOPPED")
                     DiagnosticRow("Discovery", if (diagnostics.isDiscovering) "RUNNING" else "STOPPED")
                     DiagnosticRow("Connected Peers", diagnostics.connectedPeerCount.toString())
-                    
+
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), thickness = 0.5.dp)
-                    
+
                     DiagnosticRow("Last Endpoint", diagnostics.lastDiscoveredEndpoint ?: "None")
                     DiagnosticRow("Last Event", diagnostics.lastConnectionEvent ?: "None")
-                    
+
                     if (diagnostics.lastError != null) {
                         Text("Error: ${diagnostics.lastError}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                     }
@@ -165,7 +165,7 @@ fun MeshTestScreen(
                     RelayEventItem(event)
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -211,8 +211,8 @@ private fun RelayEventItem(event: MeshRelayEvent) {
             Spacer(modifier = Modifier.height(4.dp))
             Text("Msg ID: ${event.messageId}", style = MaterialTheme.typography.bodySmall)
             Text("From: ${event.senderNodeId} | Origin: ${event.originNodeId}", style = MaterialTheme.typography.bodySmall)
-            
-            val ttlText = if (event.ttlAfter != null) "${event.ttlBefore} → ${event.ttlAfter}" else "${event.ttlBefore}"
+
+            val ttlText = if (event.ttlAfter != null) "${event.ttlBefore} -> ${event.ttlAfter}" else "${event.ttlBefore}"
             Text("TTL: $ttlText", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
         }
     }

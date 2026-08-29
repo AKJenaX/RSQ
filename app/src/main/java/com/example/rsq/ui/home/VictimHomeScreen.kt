@@ -1,17 +1,13 @@
 package com.example.rsq.ui.home
 
-import android.util.Log
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.VolunteerActivism
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,31 +16,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.rsq.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VictimHomeScreen(
     onTriggerSOS: () -> Unit,
     onViewHistory: () -> Unit,
-    onOpenProfile: () -> Unit,
-    onOpenDonations: () -> Unit,
-    onSwitchRole: () -> Unit,
+    onBack: () -> Unit,
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
-                    Text("RSQ Response", fontWeight = FontWeight.Black) 
+                title = {
+                    Text(stringResource(R.string.emergency_mode), fontWeight = FontWeight.Bold)
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
                 },
                 actions = {
-                    IconButton(onClick = onOpenDonations) {
-                        Icon(imageVector = Icons.Default.VolunteerActivism, contentDescription = "Impact Fund")
-                    }
-                    IconButton(onClick = onOpenProfile) {
-                        Icon(imageVector = Icons.Default.AccountCircle, contentDescription = "Profile")
+                    IconButton(onClick = onViewHistory) {
+                        Icon(imageVector = Icons.Default.History, contentDescription = "View History")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -88,7 +86,7 @@ fun VictimHomeScreen(
                             shape = CircleShape
                         )
                 )
-                
+
                 Button(
                     onClick = onTriggerSOS,
                     modifier = Modifier.size(180.dp),
@@ -123,28 +121,6 @@ fun VictimHomeScreen(
 
             Spacer(modifier = Modifier.height(64.dp))
 
-            // Impact Fund Card (Phase 8)
-            Card(
-                onClick = onOpenDonations,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(20.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column {
-                        Text("RSQ Impact Fund", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("Support relief efforts and recovery", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Status Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -166,12 +142,12 @@ fun VictimHomeScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text(
-                            text = "Ready to Help",
+                            text = stringResource(R.string.ready_to_help),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Your location will be shared when you trigger SOS.",
+                            text = stringResource(R.string.location_share_disclaimer),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -181,4 +157,3 @@ fun VictimHomeScreen(
         }
     }
 }
-

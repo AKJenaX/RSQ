@@ -16,12 +16,12 @@ class ReportSyncWorker(
 
     override suspend fun doWork(): Result {
         Log.i(TAG, "ReportSyncWorker STARTED")
-        
+
         val db = LocalReportDatabase.getDatabase(applicationContext)
         val localRepository = LocalReportRepository(db.reportDao())
         val cloudRepository = ReportRepository()
         val storageRepository = StorageRepository()
-        
+
         val syncManager = ReportSyncManager(
             applicationContext,
             localRepository,

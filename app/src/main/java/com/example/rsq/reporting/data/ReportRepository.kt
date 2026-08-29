@@ -1,5 +1,6 @@
 package com.example.rsq.reporting.data
 
+import android.util.Log
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.domain.ReportLifecycle
@@ -10,16 +11,19 @@ import kotlinx.coroutines.tasks.await
 open class ReportRepository(
     private val firestore: FirebaseFirestore? = null
 ) {
+    private val TAG = "ReportRepository"
+
     // Lazy initialization to avoid calling getInstance() during unit tests
-    private val db: FirebaseFirestore by lazy { 
-        firestore ?: FirebaseFirestore.getInstance() 
+    private val db: FirebaseFirestore by lazy {
+        firestore ?: FirebaseFirestore.getInstance()
     }
 
     open suspend fun submitReport(report: Report): Result<Unit> {
         if (report.id.isBlank()) {
-            return Result.failure(IllegalArgumentException("Report ID must not be empty for Firestore submission. RSQ requires a stable UUID."))
+            return Result.failure(IllegalArgumentException("Report ID must not be empty for Firestore submission."))
         }
-        
+
+        Log.i(TAG, "FIRESTORE_REPORT_CREATE_STARTED: reports/${report.id}")
         return try {
             val reportData = hashMapOf(
                 "userId" to report.userId,
@@ -31,17 +35,20 @@ open class ReportRepository(
                 "latitude" to report.latitude,
                 "longitude" to report.longitude,
                 "imageUrl" to report.imageUrl,
+                "imageUrls" to report.imageUrls,
                 "aiScore" to report.aiScore,
                 "detectedHazards" to report.detectedHazards,
                 "recommendedResources" to report.recommendedResources
             )
-            
+
             db.collection("reports")
                 .document(report.id)
                 .set(reportData)
                 .await()
+            Log.i(TAG, "FIRESTORE_REPORT_CREATE_SUCCESS: reports/${report.id}")
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "FIRESTORE_REPORT_CREATE_FAILED for reports/${report.id}: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -53,7 +60,7 @@ open class ReportRepository(
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .get()
                 .await()
-            
+
             val reports = snapshot.documents.mapNotNull { doc ->
                 val report = doc.toObject(Report::class.java)
                 report?.copy(

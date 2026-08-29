@@ -10,12 +10,12 @@ class NotificationRepositoryImpl(
     private val notificationDao: NotificationDao
 ) : NotificationRepository {
 
-    override fun getNotifications(recipientId: String): Flow<List<Notification>> = 
+    override fun getNotifications(recipientId: String): Flow<List<Notification>> =
         notificationDao.getNotificationsForRecipient(recipientId).map { list ->
             list.map { it.toDomain() }
         }
 
-    override fun getUnreadCount(recipientId: String): Flow<Int> = 
+    override fun getUnreadCount(recipientId: String): Flow<Int> =
         notificationDao.getUnreadCount(recipientId)
 
     override suspend fun markAsRead(id: String) {

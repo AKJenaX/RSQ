@@ -46,7 +46,7 @@ class NearbyMeshTransport(
     // Flow for future message observation
     private val _incomingMessages = MutableSharedFlow<MeshMessage>()
     private val _connectedPeerCount = MutableStateFlow(0)
-    
+
     // Diagnostic State
     private val _diagnostics = MutableStateFlow(MeshDiagnostics())
 
@@ -57,17 +57,17 @@ class NearbyMeshTransport(
     }
 
     override fun start() {
-        if ((_diagnostics.value.status != MeshTransportStatus.STOPPED) && 
+        if ((_diagnostics.value.status != MeshTransportStatus.STOPPED) &&
             (_diagnostics.value.status != MeshTransportStatus.ERROR)) {
             Log.d(TAG, "Transport already starting or running (status: ${_diagnostics.value.status})")
             return
         }
-        
+
         Log.i(TAG, "Starting Nearby Mesh Transport for Node: $localNodeId")
         updateStatus(MeshTransportStatus.STARTING)
-        
+
         transportScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        
+
         startAdvertising()
         startDiscovery()
     }
@@ -75,19 +75,19 @@ class NearbyMeshTransport(
     override fun stop() {
         Log.i(TAG, "Stopping Nearby Mesh Transport")
         updateStatus(MeshTransportStatus.STOPPED)
-        
+
         transportScope?.cancel()
         transportScope = null
-        
+
         connectionsClient.stopAdvertising()
         connectionsClient.stopDiscovery()
         connectionsClient.stopAllEndpoints()
-        
+
         isAdvertising = false
         isDiscovering = false
         peerStates.clear()
         peerNodeIds.clear()
-        
+
         // Reset full diagnostics on stop
         _diagnostics.value = MeshDiagnostics()
         _connectedPeerCount.value = 0
@@ -176,17 +176,17 @@ class NearbyMeshTransport(
             Log.w(TAG, "Cannot discover peers while transport is stopped")
             return
         }
-        
+
         if (isDiscovering) {
             Log.v(TAG, "Discovery already active")
             return
         }
-        
+
         startDiscovery()
     }
 
     override suspend fun sendMessage(message: MeshMessage): Result<Unit> {
-        if ((_diagnostics.value.status != MeshTransportStatus.READY) && 
+        if ((_diagnostics.value.status != MeshTransportStatus.READY) &&
             (_diagnostics.value.status != MeshTransportStatus.ADVERTISING) &&
             (_diagnostics.value.status != MeshTransportStatus.DISCOVERING)) {
             return Result.failure(IllegalStateException("Transport is not active (status: ${_diagnostics.value.status})"))
@@ -200,7 +200,7 @@ class NearbyMeshTransport(
         return try {
             val json = Json.encodeToString(message)
             val payload = Payload.fromBytes(json.toByteArray(Charsets.UTF_8))
-            
+
             connectionsClient.sendPayload(connectedEndpoints.toList(), payload).await()
             Result.success(Unit)
         } catch (e: Exception) {
@@ -236,7 +236,7 @@ class NearbyMeshTransport(
             val eventMsg = "Connection initiated: $endpointId (${info.endpointName})"
             Log.d(TAG, eventMsg)
             updateDiagnostics { it.copy(lastConnectionEvent = eventMsg) }
-            
+
             peerStates[endpointId] = EndpointState.CONNECTING
             peerNodeIds[endpointId] = info.endpointName
 
@@ -258,7 +258,7 @@ class NearbyMeshTransport(
             }
 
             val statusMsg = "Code: ${result.status.statusCode} Msg: ${result.status.statusMessage}"
-            
+
             when (result.status.statusCode) {
                 ConnectionsStatusCodes.STATUS_OK -> {
                     val nodeId = peerNodeIds[endpointId] ?: "unknown_node"
@@ -298,7 +298,7 @@ class NearbyMeshTransport(
             val eventMsg = "Found: $endpointId (${info.endpointName})"
             Log.d(TAG, eventMsg)
             updateDiagnostics { it.copy(lastDiscoveredEndpoint = eventMsg) }
-            
+
             // Check if we are already connected or connecting
             if (peerStates.containsKey(endpointId)) {
                 Log.d(TAG, "Already connecting or connected to $endpointId, ignoring discovery")
@@ -349,9 +349,9 @@ class NearbyMeshTransport(
             try {
                 val message = Json.decodeFromString<MeshMessage>(json)
                 validateMessage(message)
-                
+
                 Log.d(TAG, "Received MeshMessage: ${message.id} from $endpointId")
-                
+
                 transportScope?.launch {
                     _incomingMessages.emit(message)
                 }

@@ -16,7 +16,7 @@ import com.example.rsq.data.local.*
         VolunteerEntity::class,
         NotificationEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(AiConverters::class)
@@ -53,6 +53,13 @@ abstract class LocalReportDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reports ADD COLUMN imageUrls TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE reports ADD COLUMN localImagePaths TEXT NOT NULL DEFAULT '[]'")
+            }
+        }
+
         fun getDatabase(context: Context): LocalReportDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -60,7 +67,7 @@ abstract class LocalReportDatabase : RoomDatabase() {
                     LocalReportDatabase::class.java,
                     "report_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
                 INSTANCE = instance
                 instance

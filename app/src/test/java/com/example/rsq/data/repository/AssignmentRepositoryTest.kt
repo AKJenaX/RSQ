@@ -26,7 +26,7 @@ class AssignmentRepositoryTest {
     fun `test create and retrieve assignment`() = runBlocking {
         val newAssignment = createTestAssignment("ASGN-001")
         repository.createAssignment(newAssignment)
-        
+
         val assignments = repository.getAssignments().first()
         assertEquals(1, assignments.size)
         assertEquals("ASGN-001", assignments[0].id)
@@ -36,9 +36,9 @@ class AssignmentRepositoryTest {
     fun `test valid transition available to assigned`() = runBlocking {
         val available = createTestAssignment("ASGN-AVAIL", AssignmentStatus.AVAILABLE)
         repository.createAssignment(available)
-        
+
         repository.updateAssignmentStatus("ASGN-AVAIL", AssignmentStatus.ASSIGNED)
-        
+
         val updated = repository.getAssignmentById("ASGN-AVAIL").first()
         assertEquals(AssignmentStatus.ASSIGNED, updated?.status)
     }
@@ -47,9 +47,9 @@ class AssignmentRepositoryTest {
     fun `test invalid transition available to resolved`() = runBlocking {
         val available = createTestAssignment("ASGN-AVAIL", AssignmentStatus.AVAILABLE)
         repository.createAssignment(available)
-        
+
         repository.updateAssignmentStatus("ASGN-AVAIL", AssignmentStatus.RESOLVED)
-        
+
         val updated = repository.getAssignmentById("ASGN-AVAIL").first()
         assertEquals(AssignmentStatus.AVAILABLE, updated?.status)
     }
@@ -58,9 +58,9 @@ class AssignmentRepositoryTest {
     fun `test assigned to available transition`() = runBlocking {
         val assigned = createTestAssignment("ASGN-1", AssignmentStatus.ASSIGNED)
         repository.createAssignment(assigned)
-        
+
         repository.updateAssignmentStatus("ASGN-1", AssignmentStatus.AVAILABLE)
-        
+
         val updated = repository.getAssignmentById("ASGN-1").first()
         assertEquals(AssignmentStatus.AVAILABLE, updated?.status)
     }
@@ -85,19 +85,19 @@ class AssignmentRepositoryTest {
     class FakeAssignmentDao : AssignmentDao {
         private val assignments = MutableStateFlow<Map<String, AssignmentEntity>>(emptyMap())
 
-        override fun getAllAssignments(): Flow<List<AssignmentEntity>> = 
+        override fun getAllAssignments(): Flow<List<AssignmentEntity>> =
             assignments.map { it.values.toList().sortedByDescending { a -> a.updatedAt } }
 
-        override fun getAssignmentById(id: String): Flow<AssignmentEntity?> = 
+        override fun getAssignmentById(id: String): Flow<AssignmentEntity?> =
             assignments.map { it[id] }
 
-        override suspend fun getAssignmentByIdOneShot(id: String): AssignmentEntity? = 
+        override suspend fun getAssignmentByIdOneShot(id: String): AssignmentEntity? =
             assignments.value[id]
 
-        override fun getAssignmentsForVolunteer(volunteerId: String): Flow<List<AssignmentEntity>> = 
+        override fun getAssignmentsForVolunteer(volunteerId: String): Flow<List<AssignmentEntity>> =
             assignments.map { it.values.filter { a -> a.volunteerId == volunteerId } }
 
-        override fun getAssignmentsForReport(reportId: String): Flow<List<AssignmentEntity>> = 
+        override fun getAssignmentsForReport(reportId: String): Flow<List<AssignmentEntity>> =
             assignments.map { it.values.filter { a -> a.reportId == reportId } }
 
         override suspend fun insertAssignment(assignment: AssignmentEntity) {

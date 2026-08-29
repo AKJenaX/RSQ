@@ -9,6 +9,7 @@ import com.example.rsq.data.repository.VolunteerRepository
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,8 +37,14 @@ class AuthViewModel(
             if (result.isSuccess) {
                 val firebaseUser = result.getOrThrow()
                 val uid = firebaseUser.uid
-                val newUser = User(uid = uid, name = name, email = email, isAuthorized = false)
-                
+                // EXPLICITLY use the entered name and email for the Firestore profile
+                val newUser = User(
+                    firebaseUid = uid,
+                    name = name,
+                    email = email,
+                    isAuthorized = false
+                )
+
                 // Save profile to Firestore
                 val saveResult = repository.saveUserProfile(newUser)
                 if (saveResult.isSuccess) {
@@ -46,7 +53,12 @@ class AuthViewModel(
                     repository.sendEmailVerification()
                     _authState.value = AuthState.VerificationSent
                 } else {
-                    _authState.value = AuthState.Error("Authenticated but profile save failed.")
+                    val exception = saveResult.exceptionOrNull()
+                    val message = when (exception) {
+                        is FirebaseFirestoreException -> "Account created but profile failed: ${exception.code}"
+                        else -> "Account created but profile could not be saved. Please try logging in."
+                    }
+                    _authState.value = AuthState.Error(message)
                 }
             } else {
                 _authState.value = AuthState.Error(mapAuthError(result.exceptionOrNull()))
@@ -61,8 +73,7 @@ class AuthViewModel(
             if (result.isSuccess) {
                 val firebaseUser = result.getOrThrow()
                 if (firebaseUser.isEmailVerified) {
-                    val uid = firebaseUser.uid
-                    loadProfile(uid)
+                    loadProfile(firebaseUser.uid)
                     _authState.value = AuthState.Success("Login successful")
                 } else {
                     _authState.value = AuthState.EmailNotVerified
@@ -80,14 +91,14 @@ class AuthViewModel(
             if (result.isSuccess) {
                 val firebaseUser = result.getOrThrow()
                 val uid = firebaseUser.uid
-                
+
                 // Check if profile exists, if not create it
                 val profileResult = repository.getUserProfile(uid)
                 if (profileResult.isSuccess && profileResult.getOrNull() != null) {
                     _currentUserProfile.value = profileResult.getOrNull()
                 } else {
                     val newUser = User(
-                        uid = uid,
+                        firebaseUid = uid,
                         name = firebaseUser.displayName ?: "Google User",
                         email = firebaseUser.email ?: "",
                         isAuthorized = false
@@ -138,8 +149,17 @@ class AuthViewModel(
     private fun loadProfile(uid: String) {
         viewModelScope.launch {
             val result = repository.getUserProfile(uid)
-            if (result.isSuccess) {
-                _currentUserProfile.value = result.getOrNull()
+            val profile = result.getOrNull()
+            if (profile != null) {
+                _currentUserProfile.value = profile
+            } else {
+                // Step 5 Fallback: provide basic info from Firebase Auth if Firestore document is missing
+                _currentUserProfile.value = User(
+                    firebaseUid = uid,
+                    name = repository.getCurrentUserDisplayName() ?: "RSQ User",
+                    email = repository.getCurrentUserEmail() ?: "No email available",
+                    isAuthorized = false
+                )
             }
         }
     }
@@ -150,7 +170,7 @@ class AuthViewModel(
             val result = repository.updateRole(uid, role)
             if (result.isSuccess) {
                 _currentUserProfile.value = _currentUserProfile.value?.copy(role = role)
-                
+
                 if (role == "VOLUNTEER" && volunteerRepository != null) {
                     val name = _currentUserProfile.value?.name ?: "RSQ Responder"
                     volunteerRepository.createVolunteerProfile(uid, name)
@@ -184,7 +204,7 @@ class AuthViewModel(
     }
 
     fun getCurrentUserId(): String = repository.getCurrentUserId() ?: "anonymous"
-    
+
     fun getCurrentUserEmail(): String = repository.getCurrentUserEmail() ?: ""
 
     private fun mapAuthError(exception: Throwable?): String {

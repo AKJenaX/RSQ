@@ -28,7 +28,7 @@ import com.example.rsq.ui.common.EmptyStateView
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DonationScreen(
-    viewModel: DonationViewModel = viewModel(),
+    viewModel: DonationViewModel,
     onBack: () -> Unit,
     onMakeDonation: (Double) -> Unit
 ) {
@@ -66,7 +66,7 @@ fun DonationScreen(
                     ) {
                         item {
                             EnhancedTotalCard(
-                                amount = summary.totalAmount, 
+                                amount = summary.totalAmount,
                                 currency = summary.currency,
                                 onDonate = { onMakeDonation(100.0) }
                             )
@@ -189,9 +189,9 @@ fun EnhancedDonationCard(donation: Donation) {
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.width(16.dp))
-            
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = donation.donorName,
@@ -223,7 +223,7 @@ fun EnhancedDonationCard(donation: Donation) {
 fun DonationStatusBadge(status: String) {
     val isCompleted = status == "Completed"
     val color = if (isCompleted) Color(0xFF388E3C) else Color(0xFFFBC02D)
-    
+
     Surface(
         color = color.copy(alpha = 0.1f),
         shape = RoundedCornerShape(6.dp)

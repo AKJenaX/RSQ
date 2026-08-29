@@ -1,5 +1,6 @@
 package com.example.rsq.reporting.data
 
+import android.util.Log
 import com.example.rsq.reporting.data.local.ReportDao
 import com.example.rsq.reporting.data.local.ReportEntity
 import com.example.rsq.reporting.model.Report
@@ -9,9 +10,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 open class LocalReportRepository(private val reportDao: ReportDao) {
+    private val TAG = "LocalReportRepository"
 
-    open suspend fun saveReport(report: Report, localPath: String?, syncStatus: SyncStatus) {
-        // Phase 12: Duplicate protection
+    open suspend fun saveReport(report: Report, localPaths: List<String>, syncStatus: SyncStatus) {
         if (reportDao.getReportById(report.id) != null) return
 
         val entity = ReportEntity(
@@ -25,7 +26,9 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
             latitude = report.latitude,
             longitude = report.longitude,
             imageUrl = report.imageUrl,
-            localImagePath = localPath,
+            imageUrls = report.imageUrls,
+            localImagePath = localPaths.firstOrNull(),
+            localImagePaths = localPaths,
             isOffline = report.isOffline,
             syncStatus = syncStatus,
             aiScore = report.aiScore,
@@ -33,6 +36,7 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
             recommendedResources = report.recommendedResources
         )
         reportDao.insertReport(entity)
+        Log.i(TAG, "LOCAL_REPORT_SAVED: ID=${report.id}, SyncStatus=$syncStatus")
     }
 
     open suspend fun getPendingReports(): List<ReportEntity> {
@@ -49,8 +53,16 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
         reportDao.updateSyncStatus(id, status)
     }
 
-    open suspend fun updateImageUrl(id: String, imageUrl: String, status: SyncStatus) {
-        reportDao.updateImageUrl(id, imageUrl, status)
+    open suspend fun updateImageUrls(id: String, imageUrls: List<String>, status: SyncStatus) {
+        val entity = reportDao.getReportById(id)
+        if (entity != null) {
+            val updated = entity.copy(
+                imageUrls = imageUrls,
+                imageUrl = imageUrls.firstOrNull() ?: entity.imageUrl,
+                syncStatus = status
+            )
+            reportDao.insertReport(updated)
+        }
     }
 
     open suspend fun updateReportStatus(id: String, status: ReportStatus) {
@@ -75,6 +87,7 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
             latitude = latitude,
             longitude = longitude,
             imageUrl = imageUrl,
+            imageUrls = imageUrls,
             isOffline = isOffline,
             aiScore = aiScore,
             detectedHazards = detectedHazards,

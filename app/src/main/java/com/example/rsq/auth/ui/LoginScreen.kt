@@ -2,7 +2,6 @@ package com.example.rsq.auth.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -18,9 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -32,8 +30,10 @@ import com.example.rsq.R
 import com.example.rsq.auth.model.AuthState
 import com.example.rsq.auth.viewmodel.AuthViewModel
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.tasks.Task
 
 @Composable
 fun LoginScreen(
@@ -47,7 +47,7 @@ fun LoginScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var validationError by rememberSaveable { mutableStateOf<String?>(null) }
-    
+
     val authState by viewModel.authState.collectAsState()
 
     val gso = remember {
@@ -59,10 +59,10 @@ fun LoginScreen(
     val googleSignInClient = remember { GoogleSignIn.getClient(context, gso) }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        val task: Task<GoogleSignInAccount> = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
-            account.idToken?.let { viewModel.signInWithGoogle(it) }
+            account?.idToken?.let { viewModel.signInWithGoogle(it) }
         } catch (e: ApiException) {
             // Handle error
         }
@@ -85,14 +85,14 @@ fun LoginScreen(
         // Branding Section
         Spacer(modifier = Modifier.height(32.dp))
         Text(
-            text = "RSQ",
+            text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.displayLarge,
             fontWeight = FontWeight.Black,
             color = MaterialTheme.colorScheme.primary,
             letterSpacing = 4.sp
         )
         Text(
-            text = "Emergency Response Coordination",
+            text = stringResource(R.string.emergency_coordination),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.secondary,
             textAlign = TextAlign.Center,
@@ -111,7 +111,7 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Welcome Back",
+                    text = stringResource(R.string.welcome_back),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 24.dp)
@@ -119,8 +119,8 @@ fun LoginScreen(
 
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { 
-                        email = it 
+                    onValueChange = {
+                        email = it
                         validationError = null
                     },
                     label = { Text("Email") },
@@ -135,8 +135,8 @@ fun LoginScreen(
 
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { 
-                        password = it 
+                    onValueChange = {
+                        password = it
                         validationError = null
                     },
                     label = { Text("Password") },
@@ -165,7 +165,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Button(
-                    onClick = { 
+                    onClick = {
                         when {
                             email.isBlank() -> validationError = "Email is required"
                             password.isBlank() -> validationError = "Password is required"
@@ -187,12 +187,12 @@ fun LoginScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Signing In...", fontWeight = FontWeight.Bold)
                     } else {
-                        Text("Login", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.login), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
                     Text(" OR ", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -206,11 +206,9 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth().height(56.dp),
                     shape = MaterialTheme.shapes.medium
                 ) {
-                    // Assuming you have a google icon in your resources. If not, I'll use a placeholder.
-                    // Image(painter = painterResource(id = R.drawable.ic_google), contentDescription = null, modifier = Modifier.size(24.dp))
                     Icon(Icons.Default.Email, contentDescription = null, modifier = Modifier.size(24.dp)) // Placeholder
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Continue with Google", fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.continue_with_google), fontWeight = FontWeight.SemiBold)
                 }
 
                 // Error Display
@@ -248,12 +246,12 @@ fun LoginScreen(
 
         TextButton(onClick = onNavigateToRegister) {
             Text(
-                "Don't have an account? Register Now",
+                stringResource(R.string.register_now_prompt),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold
             )
         }
-        
+
         Spacer(modifier = Modifier.height(32.dp))
     }
 }

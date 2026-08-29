@@ -11,10 +11,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.rsq.auth.model.AuthState
 import com.example.rsq.auth.ui.EmailVerificationScreen
 import com.example.rsq.auth.ui.ForgotPasswordScreen
@@ -44,6 +52,9 @@ import com.example.rsq.ui.notification.NotificationScreen
 import com.example.rsq.ui.profile.ProfileScreen
 import com.example.rsq.ui.permission.PermissionScreen
 import com.example.rsq.ui.response.AssignmentScreen
+import com.example.rsq.location.data.LocationRepository
+import com.example.rsq.location.viewmodel.LocationViewModel
+import com.google.android.gms.location.LocationServices
 import com.example.rsq.ui.role.RoleSelectionScreen
 import com.example.rsq.ui.volunteer.VolunteerDashboardScreen
 
@@ -79,6 +90,8 @@ sealed class Screen(val route: String) {
 fun AppNavigation() {
     val context = LocalContext.current
     val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
     // Mesh dependencies
     val meshIdentityProvider = remember { NodeIdentityRepository(context) }
@@ -94,14 +107,24 @@ fun AppNavigation() {
     val volunteerRepository = remember { VolunteerRepositoryImpl(localReportDatabase.volunteerDao(), assignmentRepository) }
     val notificationRepository = remember { NotificationRepositoryImpl(localReportDatabase.notificationDao()) }
 
+    // Global Location Management
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    val locationRepository = remember { LocationRepository(context, fusedLocationClient) }
+    val locationViewModel: LocationViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                LocationViewModel(locationRepository)
+            }
+        }
+    )
+
     // Shared ViewModels
     val authViewModel: AuthViewModel = viewModel(
-        factory = object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                @Suppress("UNCHECKED_CAST")
-                return AuthViewModel(
+        factory = viewModelFactory {
+            initializer {
+                AuthViewModel(
                     volunteerRepository = volunteerRepository
-                ) as T
+                )
             }
         }
     )
@@ -119,10 +142,13 @@ fun AppNavigation() {
     // Report ViewModel
     val reportViewModel: ReportViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
+                // Extension function createSavedStateHandle() works on CreationExtras
+                val savedStateHandle = extras.createSavedStateHandle()
                 @Suppress("UNCHECKED_CAST")
                 return ReportViewModel(
                     application = context.applicationContext as android.app.Application,
+                    savedStateHandle = savedStateHandle,
                     repository = ReportRepository(),
                     localRepository = localReportRepository,
                     relayEngine = meshRelayEngine,
@@ -134,6 +160,7 @@ fun AppNavigation() {
 
     val authState by authViewModel.authState.collectAsState()
     val userProfile by authViewModel.currentUserProfile.collectAsState()
+    val locationState by locationViewModel.locationState.collectAsState()
 
     // Session check
     LaunchedEffect(Unit) {
@@ -141,21 +168,39 @@ fun AppNavigation() {
     }
 
     // Role-based auto-navigation after session restore or login
-    LaunchedEffect(userProfile) {
-        userProfile?.let { profile ->
-            if (profile.role.isNotBlank()) {
-                val target = when (profile.role) {
-                    "VICTIM" -> Screen.VictimHome.route
-                    "VOLUNTEER" -> Screen.VolunteerHome.route
-                    "AUTHORITY" -> Screen.AuthorityDashboard.route
-                    else -> null
-                }
-                target?.let {
-                    navController.navigate(it) {
-                        popUpTo(Screen.Login.route) { inclusive = true }
-                        popUpTo(Screen.Permissions.route) { inclusive = true }
+    LaunchedEffect(userProfile, currentRoute) {
+        val isAtGate = currentRoute == null ||
+                      currentRoute == Screen.Login.route ||
+                      currentRoute == Screen.Permissions.route ||
+                      currentRoute == Screen.RoleSelection.route ||
+                      currentRoute == Screen.Register.route
+
+        if (isAtGate) {
+            userProfile?.let { profile ->
+                if (profile.role.isNotBlank()) {
+                    val target = when (profile.role) {
+                        "VICTIM" -> Screen.VictimHome.route
+                        "VOLUNTEER" -> Screen.VolunteerHome.route
+                        "AUTHORITY" -> Screen.AuthorityDashboard.route
+                        else -> null
+                    }
+                    if (target != null && target != currentRoute) {
+                        navController.navigate(target) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
+                            popUpTo(Screen.Permissions.route) { inclusive = true }
+                        }
                     }
                 }
+            }
+        }
+    }
+
+    // Part 2: Start background location tracking as soon as user is authenticated
+    LaunchedEffect(userProfile != null) {
+        if (userProfile != null) {
+            locationViewModel.fetchLocation()
+            locationViewModel.locationReadiness.collect {
+                // Silently maintain location updates
             }
         }
     }
@@ -190,7 +235,6 @@ fun AppNavigation() {
                 when (val state = authState) {
                     is AuthState.Success -> {
                         if (state.message == "Login successful" || state.message == "Session restored" || state.message == "Google sign-in successful") {
-                            // If role is missing, go to selection, otherwise auto-nav handled above
                             if (userProfile?.role.isNullOrBlank()) {
                                 navController.navigate(Screen.RoleSelection.route) {
                                     popUpTo(Screen.Login.route) { inclusive = true }
@@ -254,11 +298,10 @@ fun AppNavigation() {
         }
 
         // ---------------------------------------------------------
-        // Role Selection
+        // Role Selection (RSQ HOME)
         // ---------------------------------------------------------
 
         composable(Screen.RoleSelection.route) {
-            // Handle logout
             LaunchedEffect(authState) {
                 if (authState is AuthState.LoggedOut) {
                     navController.navigate(Screen.Login.route) { popUpTo(Screen.RoleSelection.route) { inclusive = true } }
@@ -267,7 +310,10 @@ fun AppNavigation() {
 
             RoleSelectionScreen(
                 isAuthorized = userProfile?.isAuthorized ?: false,
+                locationState = locationState,
                 onLogout = { authViewModel.logout() },
+                onOpenProfile = { navController.navigate(Screen.Profile.route) },
+                onOpenDonations = { navController.navigate(Screen.Donation.route) },
                 onRoleSelected = { role ->
                     authViewModel.selectRole(role)
                     when (role) {
@@ -291,13 +337,7 @@ fun AppNavigation() {
             VictimHomeScreen(
                 onTriggerSOS = { navController.navigate(Screen.ReportSubmission.route) },
                 onViewHistory = { navController.navigate(Screen.ReportHistory.route) },
-                onOpenProfile = { navController.navigate(Screen.Profile.route) },
-                onOpenDonations = { navController.navigate(Screen.Donation.route) },
-                onSwitchRole = {
-                    navController.navigate(Screen.RoleSelection.route) {
-                        popUpTo(Screen.RoleSelection.route) { inclusive = true }
-                    }
-                }
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -308,7 +348,7 @@ fun AppNavigation() {
                 onNavigateToHistory = { navController.navigate(Screen.ReportHistory.route) },
                 onNavigateToAssignments = { navController.navigate(Screen.Assignment.route) },
                 onNavigateToNotifications = { navController.navigate(Screen.Notification.route) },
-                onLogout = { 
+                onLogout = {
                     authViewModel.logout()
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
@@ -327,8 +367,8 @@ fun AppNavigation() {
                 onOpenDashboard = {
                     navController.navigate(Screen.VolunteerDashboard.route)
                 },
-                onOpenProfile = {
-                    navController.navigate(Screen.Profile.route)
+                onBack = {
+                    navController.popBackStack()
                 },
                 onViewReport = { reportId ->
                     navController.navigate(Screen.ReportDetail(reportId).route)
@@ -343,6 +383,7 @@ fun AppNavigation() {
         composable(Screen.ReportSubmission.route) {
             ReportSubmissionScreen(
                 viewModel = reportViewModel,
+                locationViewModel = locationViewModel,
                 currentUserId = authViewModel.getCurrentUserId(),
                 onNavigateBack = {
                     navController.popBackStack()
@@ -362,7 +403,7 @@ fun AppNavigation() {
 
         composable(
             route = Screen.ReportDetail.routePattern,
-            arguments = listOf(androidx.navigation.navArgument("reportId") { type = androidx.navigation.NavType.StringType })
+            arguments = listOf(navArgument("reportId") { type = NavType.StringType })
         ) { backStackEntry ->
             val reportId = backStackEntry.arguments?.getString("reportId") ?: ""
             ReportDetailScreen(
@@ -378,16 +419,13 @@ fun AppNavigation() {
 
         composable(Screen.MeshTest.route) {
             val meshViewModel: MeshTestViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    override fun <T : ViewModel> create(
-                        modelClass: Class<T>
-                    ): T {
-                        @Suppress("UNCHECKED_CAST")
-                        return MeshTestViewModel(
+                factory = viewModelFactory {
+                    initializer {
+                        MeshTestViewModel(
                             transport = meshTransport,
                             identityProvider = meshIdentityProvider,
                             relayEngine = meshRelayEngine
-                        ) as T
+                        )
                     }
                 }
             )
@@ -406,15 +444,14 @@ fun AppNavigation() {
 
         composable(Screen.VolunteerDashboard.route) {
             val volunteerViewModel: VolunteerViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        @Suppress("UNCHECKED_CAST")
-                        return VolunteerViewModel(
+                factory = viewModelFactory {
+                    initializer {
+                        VolunteerViewModel(
                             firebaseUid = authViewModel.getCurrentUserId(),
                             volunteerRepository = volunteerRepository,
                             assignmentRepository = assignmentRepository,
                             notificationRepository = notificationRepository
-                        ) as T
+                        )
                     }
                 }
             )
@@ -437,10 +474,9 @@ fun AppNavigation() {
 
         composable(Screen.AuthorityDashboard.route) {
             val authorityViewModel: AuthorityViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        @Suppress("UNCHECKED_CAST")
-                        return AuthorityViewModel(
+                factory = viewModelFactory {
+                    initializer {
+                        AuthorityViewModel(
                             firebaseUid = authViewModel.getCurrentUserId(),
                             assignmentRepository = assignmentRepository,
                             volunteerRepository = volunteerRepository,
@@ -452,7 +488,7 @@ fun AppNavigation() {
                                 donationRepository = DonationRepositoryImpl(),
                                 localReportRepository = localReportRepository
                             )
-                        ) as T
+                        )
                     }
                 }
             )
@@ -479,10 +515,9 @@ fun AppNavigation() {
 
         composable(Screen.Assignment.route) {
             val assignmentViewModel: AssignmentViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        @Suppress("UNCHECKED_CAST")
-                        return AssignmentViewModel(repository = assignmentRepository) as T
+                factory = viewModelFactory {
+                    initializer {
+                        AssignmentViewModel(repository = assignmentRepository)
                     }
                 }
             )
@@ -501,10 +536,9 @@ fun AppNavigation() {
 
         composable(Screen.Donation.route) {
             val donationViewModel: DonationViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        @Suppress("UNCHECKED_CAST")
-                        return DonationViewModel(repository = DonationRepositoryImpl()) as T
+                factory = viewModelFactory {
+                    initializer {
+                        DonationViewModel(repository = DonationRepositoryImpl())
                     }
                 }
             )
@@ -529,13 +563,12 @@ fun AppNavigation() {
 
             if (volunteer != null) {
                 val notificationViewModel: NotificationViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            @Suppress("UNCHECKED_CAST")
-                            return NotificationViewModel(
+                    factory = viewModelFactory {
+                        initializer {
+                            NotificationViewModel(
                                 recipientId = volunteer!!.id,
                                 repository = notificationRepository
-                            ) as T
+                            )
                         }
                     }
                 )

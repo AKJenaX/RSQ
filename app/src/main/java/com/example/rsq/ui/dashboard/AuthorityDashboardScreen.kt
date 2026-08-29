@@ -31,7 +31,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthorityDashboardScreen(
-    viewModel: AuthorityViewModel = viewModel(),
+    viewModel: AuthorityViewModel,
     onBack: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     onNavigateToDonations: () -> Unit
@@ -52,7 +52,7 @@ fun AuthorityDashboardScreen(
                 actions = {
                     IconButton(onClick = onNavigateToNotifications) {
                         val unreadCount = (uiState as? UiState.Success)?.data?.unreadNotifications ?: 0
-                        BadgedBox(badge = { 
+                        BadgedBox(badge = {
                             if (unreadCount > 0) {
                                 Badge { Text(unreadCount.toString()) }
                             }
@@ -278,7 +278,7 @@ fun IncidentReportCard(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.width(6.dp))
@@ -306,7 +306,7 @@ fun IncidentReportCard(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -318,7 +318,7 @@ fun IncidentReportCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
-                
+
                 if (assignment == null || assignment.status == AssignmentStatus.AVAILABLE) {
                     Button(
                         onClick = onAssignClick,
@@ -353,7 +353,7 @@ fun IncidentStatusBadge(status: String) {
         "AVAILABLE" -> Color(0xFFFBC02D)
         else -> Color.Gray
     }
-    
+
     Surface(
         color = color.copy(alpha = 0.1f),
         shape = CircleShape,

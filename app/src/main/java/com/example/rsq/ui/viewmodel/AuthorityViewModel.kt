@@ -39,7 +39,7 @@ class AuthorityViewModel(
     fun loadData() {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
-            
+
             combine(
                 authorityRepository.getDashboardStats(),
                 authorityRepository.getRecentReports(),
@@ -73,7 +73,7 @@ class AuthorityViewModel(
                     updatedAt = System.currentTimeMillis()
                 )
             )
-            
+
             // Sync report status to local and cloud
             localReportRepository?.updateReportStatus(report.id, ReportStatus.ASSIGNED)
             try {

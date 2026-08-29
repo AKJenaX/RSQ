@@ -25,7 +25,7 @@ class DonationViewModel(
     fun loadData() {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
-            
+
             combine(
                 repository.getDonationSummary(),
                 repository.getRecentDonations()

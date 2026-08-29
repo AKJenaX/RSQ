@@ -17,7 +17,7 @@ object SeverityFusionEngine {
      * If image analysis is unavailable, text score is used as the baseline.
      */
     fun fuse(textResult: TextAnalysisResult, imageResult: ImageAnalysisResult): SeverityAnalysisResult {
-        
+
         val finalScore = if (imageResult.isAvailable) {
             (imageResult.score * IMAGE_WEIGHT + textResult.score * TEXT_WEIGHT).coerceIn(0f, 1f)
         } else {
@@ -26,7 +26,7 @@ object SeverityFusionEngine {
 
         val severity = mapScoreToSeverity(finalScore)
         val allHazards = (textResult.detectedHazards + imageResult.detectedHazards).distinct()
-        
+
         val recommendations = ResourceRecommender.recommend(allHazards, severity)
 
         return SeverityAnalysisResult(

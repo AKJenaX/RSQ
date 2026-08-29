@@ -37,7 +37,7 @@ fun PermissionScreen(
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val requiredPermissions = remember { getRequiredPermissions() }
-    
+
     var permissionsState by remember {
         mutableStateOf(checkPermissions(context, requiredPermissions))
     }
@@ -95,7 +95,7 @@ fun PermissionScreen(
                 color = MaterialTheme.colorScheme.primary,
                 letterSpacing = 4.sp
             )
-            
+
             Text(
                 text = "Permissions Required",
                 style = MaterialTheme.typography.headlineSmall,
@@ -148,7 +148,7 @@ fun PermissionScreen(
                 ) {
                     Text("Grant Permissions", fontWeight = FontWeight.Bold)
                 }
-                
+
                 TextButton(
                     onClick = {
                         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -179,9 +179,9 @@ private fun PermissionItem(
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isGranted) 
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f) 
-            else 
+            containerColor = if (isGranted)
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
+            else
                 MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
@@ -227,11 +227,11 @@ private fun checkPermissions(context: android.content.Context, list: List<String
     } else {
         true
     }
-    
+
     val all = list.all {
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
-    
+
     return PermissionsState(
         hasLocation = location,
         hasBluetooth = bluetooth,
@@ -245,7 +245,7 @@ private fun checkPermissions(context: android.content.Context, list: List<String
 
 private fun getRequiredPermissions(): List<String> {
     val list = mutableListOf<String>()
-    
+
     // Location
     list.add(Manifest.permission.ACCESS_FINE_LOCATION)
     list.add(Manifest.permission.ACCESS_COARSE_LOCATION)

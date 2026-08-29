@@ -30,7 +30,7 @@ object SeverityEngine {
      */
     fun predictSeverity(title: String, description: String): SeverityPrediction {
         val textResult = textAnalyzer.analyze(title, description)
-        
+
         // Since no image is provided in this legacy call, fuse with unavailable image result
         val fusedResult = SeverityFusionEngine.fuse(textResult, ImageAnalysisResult.unavailable())
 

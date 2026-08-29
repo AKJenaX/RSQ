@@ -27,7 +27,7 @@ import com.example.rsq.ui.viewmodel.VolunteerViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VolunteerDashboardScreen(
-    viewModel: VolunteerViewModel = viewModel(),
+    viewModel: VolunteerViewModel,
     onBack: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     onNavigateToAssignments: () -> Unit
@@ -46,9 +46,9 @@ fun VolunteerDashboardScreen(
                 actions = {
                     IconButton(onClick = onNavigateToNotifications) {
                         val unreadCount = (uiState as? UiState.Success)?.data?.unreadNotifications ?: 0
-                        BadgedBox(badge = { 
+                        BadgedBox(badge = {
                             if (unreadCount > 0) {
-                                Badge { Text(unreadCount.toString()) } 
+                                Badge { Text(unreadCount.toString()) }
                             }
                         }) {
                             Icon(Icons.Default.Notifications, contentDescription = "Notifications")

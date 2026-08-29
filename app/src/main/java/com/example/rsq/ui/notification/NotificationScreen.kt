@@ -28,7 +28,7 @@ import com.example.rsq.ui.common.ErrorView
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationScreen(
-    viewModel: NotificationViewModel = viewModel(),
+    viewModel: NotificationViewModel,
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -96,9 +96,9 @@ fun EnhancedNotificationCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (notification.isRead) 
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f) 
-            else 
+            containerColor = if (notification.isRead)
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            else
                 MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(
@@ -139,7 +139,7 @@ fun EnhancedNotificationCard(
                         fontWeight = if (notification.isRead) FontWeight.Bold else FontWeight.Black,
                         color = if (notification.isRead) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
                     )
-                    
+
                     if (!notification.isRead) {
                         Box(
                             modifier = Modifier.size(10.dp).background(color, CircleShape)

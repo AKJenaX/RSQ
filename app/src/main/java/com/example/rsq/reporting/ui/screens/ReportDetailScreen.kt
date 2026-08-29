@@ -102,8 +102,23 @@ fun ReportDetailScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Evidence
-                if (report.imageUrl != null) {
+                // Evidence (Multi-image Part 22)
+                if (report.imageUrls.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        report.imageUrls.forEach { url ->
+                            AsyncImage(
+                                model = url,
+                                contentDescription = "Evidence Image",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(240.dp)
+                                    .clip(RoundedCornerShape(16.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                } else if (report.imageUrl != null) {
                     AsyncImage(
                         model = report.imageUrl,
                         contentDescription = "Evidence Image",

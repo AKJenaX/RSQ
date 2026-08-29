@@ -13,15 +13,15 @@ class VolunteerRepositoryImpl(
     private val volunteerDao: VolunteerDao,
     private val assignmentRepository: AssignmentRepository
 ) : VolunteerRepository {
-    
-    override fun getVolunteerData(firebaseUid: String): Flow<Volunteer?> = 
+
+    override fun getVolunteerData(firebaseUid: String): Flow<Volunteer?> =
         volunteerDao.getVolunteerByFirebaseUid(firebaseUid)
             .map { it?.toDomain() }
 
-    override fun getAssignments(volunteerId: String): Flow<List<Assignment>> = 
+    override fun getAssignments(volunteerId: String): Flow<List<Assignment>> =
         assignmentRepository.getAssignmentsForVolunteer(volunteerId)
 
-    override fun getAllVolunteers(): Flow<List<Volunteer>> = 
+    override fun getAllVolunteers(): Flow<List<Volunteer>> =
         volunteerDao.getAllVolunteers()
             .onStart { seedInitialVolunteers() }
             .map { list ->
@@ -51,7 +51,7 @@ class VolunteerRepositoryImpl(
                 Volunteer("VOL-DEMO-02", "Mike Johnson", 25, 2, 1, 22),
                 Volunteer("VOL-DEMO-03", "Elena Rodriguez", 5, 0, 0, 5)
             )
-            initialList.forEach { 
+            initialList.forEach {
                 volunteerDao.insertVolunteer(VolunteerEntity.fromDomain(it, null))
             }
         }

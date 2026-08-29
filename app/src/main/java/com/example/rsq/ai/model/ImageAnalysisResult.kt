@@ -2,7 +2,7 @@ package com.example.rsq.ai.model
 
 /**
  * Represents the result of an image-based severity analysis.
- * 
+ *
  * @property score Normalized severity score in range 0.0..1.0.
  * @property confidence Normalized confidence score in range 0.0..1.0.
  * @property detectedHazards List of hazard types identified in the image.

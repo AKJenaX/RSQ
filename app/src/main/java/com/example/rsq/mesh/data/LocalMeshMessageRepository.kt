@@ -17,19 +17,19 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
 
     override fun saveMessage(message: MeshMessage) {
         val editor = prefs.edit()
-        
+
         // Add to tracking sets
         val allIds = getAllIds().toMutableSet()
         val pendingIds = getPendingIds().toMutableSet()
-        
+
         val isNew = allIds.add(message.id)
         if (isNew) {
             pendingIds.add(message.id)
         }
-        
+
         editor.putStringSet(KEY_ALL_IDS, allIds)
         editor.putStringSet(KEY_PENDING_IDS, pendingIds)
-        
+
         // Save message fields
         val prefix = "msg_${message.id}_"
         editor.putString("${prefix}sender", message.senderNodeId)
@@ -41,7 +41,7 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
         editor.putString("${prefix}priority", message.priority.name)
         editor.putString("${prefix}payload", message.payload)
         editor.putInt("${prefix}ttl", message.ttl)
-        
+
         editor.apply()
     }
 
@@ -64,15 +64,15 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
 
     private fun readMessage(id: String): MeshMessage? {
         val prefix = "msg_${id}_"
-        
+
         val sender = prefs.getString("${prefix}sender", null) ?: return null
         val origin = prefs.getString("${prefix}origin", null) ?: return null
         val typeStr = prefs.getString("${prefix}type", null) ?: return null
         val priorityStr = prefs.getString("${prefix}priority", null) ?: return null
-        
+
         val messageType = try { MeshMessageType.valueOf(typeStr) } catch (e: Exception) { MeshMessageType.SOS }
         val priority = try { Priority.valueOf(priorityStr) } catch (e: Exception) { Priority.MEDIUM }
-        
+
         val timestamp = prefs.getLong("${prefix}timestamp", 0L)
         val latStr = prefs.getString("${prefix}lat", null)
         val lngStr = prefs.getString("${prefix}lng", null)

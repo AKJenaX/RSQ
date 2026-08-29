@@ -17,7 +17,7 @@ import com.example.rsq.ui.theme.RSQTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Initialize AI Severity Engine with ONNX Runtime
         SeverityEngine.initialize(this)
 

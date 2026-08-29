@@ -27,7 +27,7 @@ import com.example.rsq.ui.common.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AssignmentScreen(
-    viewModel: AssignmentViewModel = viewModel(),
+    viewModel: AssignmentViewModel,
     onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()

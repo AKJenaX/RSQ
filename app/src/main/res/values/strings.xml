@@ -1,3 +1,63 @@
 <resources>
     <string name="app_name">RSQ</string>
+    <string name="default_web_client_id">dummy_id</string>
+
+    <!-- Branding -->
+    <string name="app_tagline">Rescue • Support • Quick Response</string>
+    <string name="branding_description">Join the Intelligent Response Network</string>
+    <string name="emergency_coordination">Emergency Response Coordination</string>
+
+    <!-- Home / Role Selection -->
+    <string name="choose_mode">Choose your mode</string>
+    <string name="need_help">I NEED HELP</string>
+    <string name="need_help_description">Broadcast emergency signal</string>
+    <string name="can_help">I CAN HELP</string>
+    <string name="can_help_description">Respond to nearby alerts</string>
+    <string name="authority_mode">Authority Mode</string>
+    <string name="authority_description">Manage incidents and resources</string>
+    <string name="change_anytime">You can change this anytime in settings</string>
+    <string name="location_ready">Location Ready</string>
+    <string name="getting_location">Getting location...</string>
+
+    <!-- Location Dialog -->
+    <string name="location_required">Location is required</string>
+    <string name="location_required_description">RSQ requires Location Services to provide emergency assistance. Please enable it in your system settings.</string>
+    <string name="enable_location">ENABLE LOCATION</string>
+
+    <!-- Victim Home -->
+    <string name="emergency_mode">Emergency Mode</string>
+    <string name="ready_to_help">Ready to Help</string>
+    <string name="location_share_disclaimer">Your location will be shared when you trigger SOS.</string>
+
+    <!-- Volunteer Home -->
+    <string name="responder_hub">Responder Hub</string>
+    <string name="nearby_requests">Nearby Requests</string>
+    <string name="emergency_alerts_description">Real-time emergency alerts in your area</string>
+    <string name="no_active_requests">No active requests nearby</string>
+    <string name="view_report">VIEW</string>
+    <string name="coordinates_available">Coordinates available</string>
+    <string name="location_unknown">Location unknown</string>
+    <string name="nearby_offline">Nearby / Offline</string>
+
+    <!-- Profile -->
+    <string name="my_profile">My Profile</string>
+    <string name="account_activity">Account Activity</string>
+    <string name="emergency_history">Emergency History</string>
+    <string name="my_assignments">My Assignments</string>
+    <string name="alert_notifications">Alert Notifications</string>
+    <string name="logout_session">Logout Session</string>
+
+    <!-- Auth -->
+    <string name="welcome_back">Welcome Back</string>
+    <string name="login">Login</string>
+    <string name="register_now_prompt">Don\'t have an account? Register Now</string>
+    <string name="continue_with_google">Continue with Google</string>
+
+    <!-- Email Verification -->
+    <string name="verify_email">Verify your email</string>
+    <string name="verification_sent_to">We\'ve sent a verification link to:\n%1$s</string>
+    <string name="i_verified_email">I\'ve Verified My Email</string>
+    <string name="resend_verification">Resend Verification Email</string>
+    <string name="back_to_login">Back to Login</string>
+    <string name="email_not_verified_yet">Your email is not verified yet. Please check your inbox and click the verification link.</string>
 </resources>

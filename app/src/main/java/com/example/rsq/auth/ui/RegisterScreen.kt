@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -18,6 +19,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.rsq.R
 import com.example.rsq.auth.model.AuthState
 import com.example.rsq.auth.viewmodel.AuthViewModel
 
@@ -33,7 +35,7 @@ fun RegisterScreen(
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var validationError by rememberSaveable { mutableStateOf<String?>(null) }
-    
+
     val authState by viewModel.authState.collectAsState()
 
     LaunchedEffect(authState) {
@@ -53,14 +55,14 @@ fun RegisterScreen(
         // Branding Section
         Spacer(modifier = Modifier.height(32.dp))
         Text(
-            text = "RSQ",
+            text = stringResource(R.string.app_name),
             style = MaterialTheme.typography.displayLarge,
             fontWeight = FontWeight.Black,
             color = MaterialTheme.colorScheme.primary,
             letterSpacing = 4.sp
         )
         Text(
-            text = "Join the Intelligent Response Network",
+            text = stringResource(R.string.branding_description),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.secondary,
             textAlign = TextAlign.Center,
@@ -87,8 +89,8 @@ fun RegisterScreen(
 
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { 
-                        name = it 
+                    onValueChange = {
+                        name = it
                         validationError = null
                     },
                     label = { Text("Full Name") },
@@ -102,8 +104,8 @@ fun RegisterScreen(
 
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { 
-                        email = it 
+                    onValueChange = {
+                        email = it
                         validationError = null
                     },
                     label = { Text("Email Address") },
@@ -118,8 +120,8 @@ fun RegisterScreen(
 
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { 
-                        password = it 
+                    onValueChange = {
+                        password = it
                         validationError = null
                     },
                     label = { Text("Password") },
@@ -143,8 +145,8 @@ fun RegisterScreen(
 
                 OutlinedTextField(
                     value = confirmPassword,
-                    onValueChange = { 
-                        confirmPassword = it 
+                    onValueChange = {
+                        confirmPassword = it
                         validationError = null
                     },
                     label = { Text("Confirm Password") },
@@ -159,7 +161,7 @@ fun RegisterScreen(
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Button(
-                    onClick = { 
+                    onClick = {
                         when {
                             name.isBlank() -> validationError = "Name is required"
                             email.isBlank() -> validationError = "Email is required"

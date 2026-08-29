@@ -6,17 +6,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.OfflineBolt
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.rsq.R
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.ui.components.SeverityBadge
 import com.example.rsq.reporting.viewmodel.ReportViewModel
@@ -26,7 +25,7 @@ import com.example.rsq.reporting.viewmodel.ReportViewModel
 fun VolunteerHomeScreen(
     reportViewModel: ReportViewModel,
     onOpenDashboard: () -> Unit,
-    onOpenProfile: () -> Unit,
+    onBack: () -> Unit,
     onViewReport: (String) -> Unit
 ) {
     val cloudReports by reportViewModel.reports.collectAsState()
@@ -51,14 +50,16 @@ fun VolunteerHomeScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "RSQ Responder",
+                        stringResource(R.string.responder_hub),
                         fontWeight = FontWeight.Black
                     )
                 },
-                actions = {
-                    IconButton(onClick = onOpenProfile) {
-                        Icon(imageVector = Icons.Default.AccountCircle, contentDescription = "Profile")
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
                     TextButton(onClick = onOpenDashboard) {
                         Icon(
                             imageVector = Icons.Default.Dashboard,
@@ -87,13 +88,13 @@ fun VolunteerHomeScreen(
                 modifier = Modifier.padding(vertical = 16.dp)
             ) {
                 Text(
-                    text = "Nearby Requests",
+                    text = stringResource(R.string.nearby_requests),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold
                 )
 
                 Text(
-                    text = "Real-time emergency alerts in your area",
+                    text = stringResource(R.string.emergency_alerts_description),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -108,9 +109,11 @@ fun VolunteerHomeScreen(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(
-                            "📡",
-                            fontSize = 48.sp
+                        Icon(
+                            imageVector = Icons.Default.CellTower,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                         )
 
                         Spacer(
@@ -118,7 +121,7 @@ fun VolunteerHomeScreen(
                         )
 
                         Text(
-                            text = "No active requests nearby",
+                            text = stringResource(R.string.no_active_requests),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -217,7 +220,7 @@ fun EmergencyRequestCard(
                                 )
 
                                 Text(
-                                    "Nearby / Offline",
+                                    stringResource(R.string.nearby_offline),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Black,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer
@@ -258,9 +261,9 @@ fun EmergencyRequestCard(
 
                     Text(
                         text = if (report.latitude != null) {
-                            "Coordinates available"
+                            stringResource(R.string.coordinates_available)
                         } else {
-                            "Location unknown"
+                            stringResource(R.string.location_unknown)
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -278,7 +281,7 @@ fun EmergencyRequestCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "VIEW",
+                        stringResource(R.string.view_report),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Black
                     )

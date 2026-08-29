@@ -32,11 +32,11 @@ class VolunteerViewModel(
     fun loadData() {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
-            
+
             // Try to resolve or create profile first
             volunteerRepository.getVolunteerData(firebaseUid).collect { volunteer ->
                 if (volunteer == null) {
-                    // This case should be handled by AuthViewModel, 
+                    // This case should be handled by AuthViewModel,
                     // but we'll try a fallback here for robustness
                     _uiState.value = UiState.Error("Profile not resolved. Please restart app.")
                     return@collect

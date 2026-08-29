@@ -2,7 +2,7 @@ package com.example.rsq.mesh.model
 
 /**
  * Represents a device participating in the mesh network.
- * 
+ *
  * @property nodeId Unique identifier for the mesh participant.
  * @property role The designated role of the node (e.g., Victim, Volunteer).
  * @property lastSeen Timestamp of the last successful interaction with this node.

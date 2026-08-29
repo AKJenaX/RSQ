@@ -14,7 +14,7 @@ class AuthorityRepositoryImpl(
     private val donationRepository: DonationRepository,
     private val localReportRepository: LocalReportRepository? = null
 ) : AuthorityRepository {
-    
+
     private val _reports = if (localReportRepository != null) {
         localReportRepository.observeAllReports().map { reports ->
             reports.map { it.toRecentReport() }

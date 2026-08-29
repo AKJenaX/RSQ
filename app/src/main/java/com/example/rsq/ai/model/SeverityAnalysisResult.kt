@@ -2,7 +2,7 @@ package com.example.rsq.ai.model
 
 /**
  * Represents the final multimodal severity analysis.
- * 
+ *
  * @property imageScore The score contribution from image analysis.
  * @property textScore The score contribution from text analysis.
  * @property finalScore The fused severity score in range 0.0..1.0.
