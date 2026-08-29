@@ -28,22 +28,8 @@ fun VolunteerHomeScreen(
     onBack: () -> Unit,
     onViewReport: (String) -> Unit
 ) {
-    val cloudReports by reportViewModel.reports.collectAsState()
-    val meshReports by reportViewModel.meshReports.collectAsState()
-
-    val allReports = remember(cloudReports, meshReports) {
-        val reportMap = mutableMapOf<String, Report>()
-
-        meshReports.forEach {
-            reportMap[it.id] = it
-        }
-
-        cloudReports.forEach {
-            reportMap[it.id] = it
-        }
-
-        reportMap.values.sortedByDescending { it.timestamp }
-    }
+    // Unified reports from both Cloud and Mesh sources
+    val allReports by reportViewModel.allEmergencyReports.collectAsState()
 
     Scaffold(
         topBar = {

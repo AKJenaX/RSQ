@@ -57,6 +57,9 @@ import com.example.rsq.location.viewmodel.LocationViewModel
 import com.google.android.gms.location.LocationServices
 import com.example.rsq.ui.role.RoleSelectionScreen
 import com.example.rsq.ui.volunteer.VolunteerDashboardScreen
+import com.example.rsq.util.NetworkConnectivityObserver
+import com.example.rsq.util.ConnectivityObserver
+import kotlinx.coroutines.launch
 
 sealed class Screen(val route: String) {
     object Permissions : Screen("permissions")
@@ -86,12 +89,16 @@ sealed class Screen(val route: String) {
     object Notification : Screen("notification_screen")
 }
 
+@OptIn(androidx.lifecycle.viewmodel.compose.SavedStateHandleSaveableApi::class)
 @Composable
 fun AppNavigation() {
     val context = LocalContext.current
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+
+    // Connectivity
+    val connectivityObserver = remember { NetworkConnectivityObserver(context) }
 
     // Mesh dependencies
     val meshIdentityProvider = remember { NodeIdentityRepository(context) }
@@ -143,7 +150,6 @@ fun AppNavigation() {
     val reportViewModel: ReportViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
-                // Extension function createSavedStateHandle() works on CreationExtras
                 val savedStateHandle = extras.createSavedStateHandle()
                 @Suppress("UNCHECKED_CAST")
                 return ReportViewModel(
@@ -151,6 +157,7 @@ fun AppNavigation() {
                     savedStateHandle = savedStateHandle,
                     repository = ReportRepository(),
                     localRepository = localReportRepository,
+                    connectivityObserver = connectivityObserver,
                     relayEngine = meshRelayEngine,
                     identityProvider = meshIdentityProvider
                 ) as T
@@ -195,13 +202,19 @@ fun AppNavigation() {
         }
     }
 
-    // Part 2: Start background location tracking as soon as user is authenticated
+    // Unified Mesh + Location lifecycle management
     LaunchedEffect(userProfile != null) {
         if (userProfile != null) {
+            // Start background location tracking
             locationViewModel.fetchLocation()
-            locationViewModel.locationReadiness.collect {
-                // Silently maintain location updates
+            launch {
+                locationViewModel.locationReadiness.collect { }
             }
+
+            // Start Mesh Communication Service automatically
+            meshTransport.start()
+        } else {
+            meshTransport.stop()
         }
     }
 

@@ -21,6 +21,7 @@ import com.example.rsq.reporting.sync.SyncScheduler
 import com.example.rsq.reporting.sync.ReportSyncManager
 import com.example.rsq.storage.data.StorageRepository
 import com.example.rsq.ai.data.SeverityEngine
+import com.example.rsq.util.ConnectivityObserver
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -31,6 +32,7 @@ class ReportViewModel(
     private val savedStateHandle: SavedStateHandle,
     private val repository: ReportRepository,
     private val localRepository: LocalReportRepository,
+    private val connectivityObserver: ConnectivityObserver,
     private val relayEngine: MeshRelayEngine? = null,
     private val identityProvider: NodeIdentityProvider? = null
 ) : AndroidViewModel(application) {
@@ -83,6 +85,18 @@ class ReportViewModel(
     private val _meshReports = MutableStateFlow<List<Report>>(emptyList())
     val meshReports: StateFlow<List<Report>> = _meshReports.asStateFlow()
 
+    // Combined reports for the responder hub
+    val allEmergencyReports: StateFlow<List<Report>> = combine(_reports, _meshReports) { cloud, mesh ->
+        val reportMap = mutableMapOf<String, Report>()
+        mesh.forEach { reportMap[it.id] = it }
+        cloud.forEach { reportMap[it.id] = it }
+        reportMap.values.sortedByDescending { it.timestamp }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _connectivityStatus = connectivityObserver.observe()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ConnectivityObserver.Status.Unavailable)
+    val connectivityStatus: StateFlow<ConnectivityObserver.Status> = _connectivityStatus
+
     init {
         observeMeshTraffic()
         observeLocalReports()
@@ -124,48 +138,46 @@ class ReportViewModel(
                     recommendedResources = aiResult.recommendedResources
                 )
 
-                // 3. Persist locally FIRST
+                // 3. Persist locally FIRST (Durable Offline-First)
                 localRepository.saveReport(finalReport, localPaths, SyncStatus.LOCAL_ONLY)
                 Log.i(TAG, "LOCAL_REPORT_SAVED: ID=$reportId")
 
-                // 4. Mesh broadcast
+                // 4. Mesh broadcast (Resilient offline fallback)
                 viewModelScope.launch {
                     broadcastViaMesh(finalReport)
                 }
 
-                // 5. Immediate Cloud Sync attempt
-                val syncManager = ReportSyncManager(
-                    getApplication(),
-                    localRepository,
-                    repository,
-                    StorageRepository()
-                )
-
-                Log.i(TAG, "CLOUD_SYNC_STARTED: Attempting immediate sync for $reportId")
-
-                val syncResult = syncManager.syncReport(reportId) { progress ->
-                    when (progress) {
-                        ReportSyncManager.SyncProgress.UPLOADING_EVIDENCE ->
-                            _reportState.value = ReportState.UploadingEvidence
-                        ReportSyncManager.SyncProgress.CREATING_CLOUD_REPORT ->
-                            _reportState.value = ReportState.CreatingCloudReport
+                // 5. Determine communication path based on connectivity
+                if (_connectivityStatus.value == ConnectivityObserver.Status.Available) {
+                    Log.i(TAG, "COMMUNICATION_PATH_SELECTED: ONLINE (Firebase)")
+                    val syncManager = ReportSyncManager(
+                        getApplication(),
+                        localRepository,
+                        repository,
+                        StorageRepository()
+                    )
+                    
+                    val syncResult = syncManager.syncReport(reportId) { progress ->
+                        when (progress) {
+                            ReportSyncManager.SyncProgress.UPLOADING_EVIDENCE ->
+                                _reportState.value = ReportState.UploadingEvidence
+                            ReportSyncManager.SyncProgress.CREATING_CLOUD_REPORT ->
+                                _reportState.value = ReportState.CreatingCloudReport
+                        }
                     }
-                }
 
-                if (syncResult.isSuccess) {
-                    Log.i(TAG, "REPORT_SYNC_SUCCESS: $reportId")
-                    _reportState.value = ReportState.Success("Report submitted successfully.")
-                    clearForm()
+                    if (syncResult.isSuccess) {
+                        Log.i(TAG, "REPORT_SYNC_SUCCESS: $reportId")
+                        _reportState.value = ReportState.Success("Report submitted successfully.")
+                        clearForm()
+                    } else {
+                        handleSyncFailure(reportId, syncResult.exceptionOrNull())
+                    }
                 } else {
-                    val error = syncResult.exceptionOrNull()
-                    val reason = when {
-                        error?.message?.contains("upload", true) == true -> "Image upload failed"
-                        error?.message?.contains("Firestore", true) == true -> "Cloud write failed"
-                        else -> "Device is offline"
-                    }
-                    Log.w(TAG, "REPORT_SYNC_FAILED: $reportId, reason=$reason, technical=${error?.message}")
+                    Log.i(TAG, "COMMUNICATION_PATH_SELECTED: OFFLINE (Mesh only)")
+                    _reportState.value = ReportState.PendingSync("Offline: Emergency alert sent to nearby devices. Will sync to cloud when internet returns.")
                     SyncScheduler.scheduleSync(getApplication())
-                    _reportState.value = ReportState.PendingSync("Saved locally. $reason. Syncing will continue in background.")
+                    clearForm() 
                 }
 
             } catch (e: Exception) {
@@ -173,6 +185,18 @@ class ReportViewModel(
                 _reportState.value = ReportState.Error(e.message ?: "Failed to process report")
             }
         }
+    }
+
+    private fun handleSyncFailure(reportId: String, error: Throwable?) {
+        val reason = when {
+            error?.message?.contains("upload", true) == true -> "Image upload failed"
+            error?.message?.contains("Firestore", true) == true -> "Cloud write failed"
+            else -> "Connection issue"
+        }
+        Log.w(TAG, "REPORT_SYNC_FAILED: $reportId, reason=$reason, technical=${error?.message}")
+        SyncScheduler.scheduleSync(getApplication())
+        _reportState.value = ReportState.PendingSync("Saved locally. $reason. Syncing will continue in background.")
+        clearForm() 
     }
 
     private fun observeLocalReports() {
@@ -195,6 +219,7 @@ class ReportViewModel(
                     .filter { it.messageType == MeshMessageType.REPORT_RELAY || it.messageType == MeshMessageType.SOS }
                     .collect { meshMsg ->
                         val report = convertFromMeshMessage(meshMsg)
+                        // Persist mesh-delivered reports to local Room DB
                         localRepository.saveReport(report, emptyList(), SyncStatus.LOCAL_ONLY)
                         updateMeshReports(report)
                     }
@@ -227,16 +252,22 @@ class ReportViewModel(
             longitude = report.longitude,
             priority = priority,
             payload = "${report.title}: ${report.description}",
-            ttl = 3
+            ttl = 3,
+            title = report.title,
+            description = report.description
         )
     }
 
     private fun convertFromMeshMessage(msg: MeshMessage): Report {
+        // Prefer explicit fields if available, otherwise fall back to payload parsing
+        val title = if (msg.title.isNotBlank()) msg.title else msg.payload.substringBefore(": ")
+        val description = if (msg.description.isNotBlank()) msg.description else msg.payload.substringAfter(": ")
+
         return Report(
             id = msg.id,
             userId = msg.originNodeId,
-            title = msg.payload.substringBefore(": "),
-            description = msg.payload.substringAfter(": "),
+            title = title,
+            description = description,
             severity = when (msg.priority) {
                 Priority.HIGH -> "HIGH"
                 Priority.MEDIUM -> "MEDIUM"

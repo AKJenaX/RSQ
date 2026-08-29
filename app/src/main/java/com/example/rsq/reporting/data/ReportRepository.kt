@@ -6,6 +6,7 @@ import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.domain.ReportLifecycle
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.tasks.await
 
 open class ReportRepository(
@@ -13,7 +14,6 @@ open class ReportRepository(
 ) {
     private val TAG = "ReportRepository"
 
-    // Lazy initialization to avoid calling getInstance() during unit tests
     private val db: FirebaseFirestore by lazy {
         firestore ?: FirebaseFirestore.getInstance()
     }
@@ -25,7 +25,7 @@ open class ReportRepository(
 
         Log.i(TAG, "FIRESTORE_REPORT_CREATE_STARTED: reports/${report.id}")
         return try {
-            val reportData = hashMapOf(
+            val reportData = mutableMapOf<String, Any?>(
                 "userId" to report.userId,
                 "title" to report.title,
                 "description" to report.description,
@@ -34,16 +34,23 @@ open class ReportRepository(
                 "timestamp" to report.timestamp,
                 "latitude" to report.latitude,
                 "longitude" to report.longitude,
-                "imageUrl" to report.imageUrl,
-                "imageUrls" to report.imageUrls,
                 "aiScore" to report.aiScore,
                 "detectedHazards" to report.detectedHazards,
                 "recommendedResources" to report.recommendedResources
             )
+            
+            // Only include image fields if they are not empty to prevent relays 
+            // from accidentally clearing evidence uploaded by the origin node.
+            if (report.imageUrls.isNotEmpty()) {
+                reportData["imageUrl"] = report.imageUrl
+                reportData["imageUrls"] = report.imageUrls
+            } else if (report.imageUrl != null) {
+                 reportData["imageUrl"] = report.imageUrl
+            }
 
             db.collection("reports")
                 .document(report.id)
-                .set(reportData)
+                .set(reportData, SetOptions.merge())
                 .await()
             Log.i(TAG, "FIRESTORE_REPORT_CREATE_SUCCESS: reports/${report.id}")
             Result.success(Unit)

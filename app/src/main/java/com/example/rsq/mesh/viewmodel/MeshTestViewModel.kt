@@ -86,7 +86,9 @@ class MeshTestViewModel(
                 longitude = 77.5946,
                 priority = Priority.HIGH,
                 payload = "RSQ mesh connectivity test",
-                ttl = 3
+                ttl = 3,
+                title = "Test SOS",
+                description = "Manual connectivity test from Mesh Screen"
             )
 
             val result = relayEngine.broadcastMessage(message)
@@ -100,6 +102,6 @@ class MeshTestViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        transport.stop()
+        // No longer stopping transport here globally, as AppNavigation manages its lifecycle
     }
 }

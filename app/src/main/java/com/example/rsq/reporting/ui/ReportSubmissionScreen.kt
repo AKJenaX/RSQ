@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import java.io.File
+import com.example.rsq.R
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.model.ReportState
@@ -62,7 +64,7 @@ fun ReportSubmissionScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-
+    
     val locationState by locationViewModel.locationReadiness.collectAsState()
     val reportState by viewModel.reportState.collectAsState()
 
@@ -70,7 +72,7 @@ fun ReportSubmissionScreen(
     val description by viewModel.description.collectAsState()
     val selectedImageUris by viewModel.selectedImageUris.collectAsState()
     val tempCameraUri by viewModel.tempCameraUri.collectAsState()
-
+    
     var validationError by rememberSaveable { mutableStateOf<String?>(null) }
 
     val galleryLauncher = rememberLauncherForActivityResult(
@@ -86,7 +88,7 @@ fun ReportSubmissionScreen(
             viewModel.addImageUris(listOf(tempCameraUri!!))
         }
     }
-
+    
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -100,7 +102,7 @@ fun ReportSubmissionScreen(
         }
     }
 
-    // Success Overlay (Part 10)
+    // Success Overlay
     if (reportState is ReportState.Success) {
         Dialog(
             onDismissRequest = { viewModel.resetState(); onNavigateBack() },
@@ -175,7 +177,7 @@ fun ReportSubmissionScreen(
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Location Readiness UI - Now non-blocking and uses global state
+            // Location Readiness UI
             LocationReadinessSection(
                 state = locationState,
                 onEnableLocation = {
@@ -210,7 +212,7 @@ fun ReportSubmissionScreen(
                 ) {
                     OutlinedTextField(
                         value = title,
-                        onValueChange = {
+                        onValueChange = { 
                             viewModel.updateTitle(it)
                             validationError = null
                         },
@@ -224,7 +226,7 @@ fun ReportSubmissionScreen(
 
                     OutlinedTextField(
                         value = description,
-                        onValueChange = {
+                        onValueChange = { 
                             viewModel.updateDescription(it)
                             validationError = null
                         },
@@ -243,7 +245,7 @@ fun ReportSubmissionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Evidence Photos Section (Part 10)
+            // Evidence Photos Section
             ElevatedCard(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large
@@ -316,7 +318,7 @@ fun ReportSubmissionScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Button(
-                            onClick = {
+                            onClick = { 
                                 val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
                                 if (hasPermission) {
                                     val photoFile = File(context.cacheDir, "temp_camera_${System.currentTimeMillis()}.jpg")
@@ -347,7 +349,7 @@ fun ReportSubmissionScreen(
                             Text("Photos")
                         }
                     }
-
+                    
                     if (selectedImageUris.size == 5) {
                         Text(
                             text = "Maximum of 5 photos reached",
@@ -360,18 +362,18 @@ fun ReportSubmissionScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Submit Button gated by location availability - NO PROCEED ANYWAY
+            // Submit Button gated by location availability
             val hasLocation = locationState.latitude != null && locationState.longitude != null
             val isLocationReliable = locationState.readiness == LocationReadiness.READY
             val canSubmit = hasLocation && isLocationReliable
             val isProcessing = reportState !is ReportState.Idle && reportState !is ReportState.Error && reportState !is ReportState.Success && reportState !is ReportState.PendingSync
-
+            
             Button(
                 onClick = {
                     when {
-                        title.isBlank() -> validationError = "Title is required"
-                        description.isBlank() -> validationError = "Description is required"
-                        !canSubmit -> validationError = "Valid location is required for emergency reports."
+                        title.isBlank() -> validationError = context.getString(R.string.title_required)
+                        description.isBlank() -> validationError = context.getString(R.string.description_required)
+                        !canSubmit -> validationError = context.getString(R.string.location_required_error)
                         else -> {
                             coroutineScope.launch {
                                 val report = Report(
@@ -404,15 +406,14 @@ fun ReportSubmissionScreen(
                         strokeWidth = 2.dp
                     )
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = when (reportState) {
-                            is ReportState.UploadingEvidence -> "Uploading evidence..."
-                            is ReportState.CreatingCloudReport -> "Sending report..."
-                            else -> "Submitting..."
-                        }
-                    )
+                    val loadingLabel = when (reportState) {
+                        is ReportState.UploadingEvidence -> stringResource(R.string.uploading_evidence)
+                        is ReportState.CreatingCloudReport -> stringResource(R.string.sending_report)
+                        else -> stringResource(R.string.submitting)
+                    }
+                    Text(text = loadingLabel)
                 } else {
-                    val label = if (canSubmit) "Submit Report" else "Acquiring Location..."
+                    val label = if (canSubmit) stringResource(R.string.submit_report) else stringResource(R.string.acquiring_location)
                     Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
@@ -491,15 +492,16 @@ private fun LocationReadinessSection(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
+                    val statusText = when (state.readiness) {
+                        LocationReadiness.READY -> stringResource(R.string.location_ready)
+                        LocationReadiness.SERVICES_DISABLED -> "Location Services Disabled"
+                        LocationReadiness.PERMISSION_DENIED -> "Location Permission Required"
+                        LocationReadiness.ACQUIRING -> "Acquiring GPS Signal..."
+                        LocationReadiness.LOW_ACCURACY -> "Improving Accuracy..."
+                        else -> "Location Error"
+                    }
                     Text(
-                        text = when (state.readiness) {
-                            LocationReadiness.READY -> "Location Ready"
-                            LocationReadiness.SERVICES_DISABLED -> "Location Services Disabled"
-                            LocationReadiness.PERMISSION_DENIED -> "Location Permission Required"
-                            LocationReadiness.ACQUIRING -> "Acquiring GPS Signal..."
-                            LocationReadiness.LOW_ACCURACY -> "Improving Accuracy..."
-                            else -> "Location Error"
-                        },
+                        text = statusText,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )

@@ -41,6 +41,11 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
         editor.putString("${prefix}priority", message.priority.name)
         editor.putString("${prefix}payload", message.payload)
         editor.putInt("${prefix}ttl", message.ttl)
+        
+        // Unified fields
+        editor.putString("${prefix}title", message.title)
+        editor.putString("${prefix}description", message.description)
+        editor.putString("${prefix}acc", message.accuracy?.toString())
 
         editor.apply()
     }
@@ -79,6 +84,11 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
         val payload = prefs.getString("${prefix}payload", "") ?: ""
         val ttl = prefs.getInt("${prefix}ttl", 0)
 
+        // Unified fields
+        val title = prefs.getString("${prefix}title", "") ?: ""
+        val description = prefs.getString("${prefix}description", "") ?: ""
+        val accStr = prefs.getString("${prefix}acc", null)
+
         return MeshMessage(
             id = id,
             senderNodeId = sender,
@@ -89,7 +99,10 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
             longitude = lngStr?.toDoubleOrNull(),
             priority = priority,
             payload = payload,
-            ttl = ttl
+            ttl = ttl,
+            title = title,
+            description = description,
+            accuracy = accStr?.toFloatOrNull()
         )
     }
 

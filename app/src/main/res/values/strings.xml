@@ -60,4 +60,16 @@
     <string name="resend_verification">Resend Verification Email</string>
     <string name="back_to_login">Back to Login</string>
     <string name="email_not_verified_yet">Your email is not verified yet. Please check your inbox and click the verification link.</string>
+
+    <!-- Reporting -->
+    <string name="submit_report">Submit Report</string>
+    <string name="submitting">Submitting...</string>
+    <string name="uploading_evidence">Uploading evidence...</string>
+    <string name="sending_report">Sending report...</string>
+    <string name="report_submitted_success">Report submitted successfully.</string>
+    <string name="offline_broadcast_success">Offline: Emergency alert sent to nearby devices. Will sync to cloud when internet returns.</string>
+    <string name="acquiring_location">Acquiring Location...</string>
+    <string name="location_required_error">Valid location is required for emergency reports.</string>
+    <string name="title_required">Title is required</string>
+    <string name="description_required">Description is required</string>
 </resources>
