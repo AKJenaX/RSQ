@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     FIREBASE_PROJECT_ID: str = "rsq-app"
 
     # Sensible defaults for donation range
-    MIN_DONATION_PAISE: int = 10000  # ₹100
+    MIN_DONATION_PAISE: int = 100  # ₹1 (Razorpay minimum)
     MAX_DONATION_PAISE: int = 10000000  # ₹100,000
 
     model_config = SettingsConfigDict(

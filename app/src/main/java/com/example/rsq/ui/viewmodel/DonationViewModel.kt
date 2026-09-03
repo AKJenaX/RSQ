@@ -1,5 +1,6 @@
 package com.example.rsq.ui.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rsq.data.model.Donation
@@ -10,6 +11,7 @@ import com.example.rsq.data.network.VerificationRequest
 import com.example.rsq.data.repository.DonationRepository
 import com.example.rsq.data.repository.DonationRepositoryImpl
 import com.example.rsq.data.network.NetworkModule
+import com.example.rsq.data.repository.FirestoreDonationRepository
 import com.example.rsq.util.PaymentResultHandler
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -26,7 +28,7 @@ sealed class PaymentState {
 }
 
 class DonationViewModel(
-    private val repository: DonationRepository = DonationRepositoryImpl(),
+    private val repository: DonationRepository = FirestoreDonationRepository(),
     private val razorpayService: RazorpayService = NetworkModule.razorpayService
 ) : ViewModel() {
 
@@ -97,6 +99,7 @@ class DonationViewModel(
         viewModelScope.launch {
             _paymentState.value = PaymentState.CreatingOrder
             try {
+                Log.d("DONATION", "[DONATION] creating Razorpay order")
                 // Convert amount to paise with rounding to avoid floating point issues
                 val amountInPaise = Math.round(amount * 100).toInt()
                 val response = razorpayService.createOrder(
@@ -105,8 +108,10 @@ class DonationViewModel(
                         receipt = "receipt_${System.currentTimeMillis()}"
                     )
                 )
+                Log.d("DONATION", "[DONATION] backend order created = ${response.id}")
                 _paymentState.value = PaymentState.OrderCreated(response.id, amount)
             } catch (e: Exception) {
+                Log.e("DONATION", "Order creation failed", e)
                 _paymentState.value = PaymentState.Failure("Failed to initiate payment: ${e.message}")
             }
         }

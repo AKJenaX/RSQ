@@ -40,9 +40,9 @@ service cloud.firestore {
     // =========================
     match /donations/{donationId} {
 
-      // Authenticated users can read donations
-      // for the Impact Fund UI.
-      allow read: if request.auth != null;
+      // Public read access for the Impact Fund UI.
+      // Anyone can see the donation history.
+      allow read: if true;
 
       // NEVER allow Android clients to create or modify
       // donation records.

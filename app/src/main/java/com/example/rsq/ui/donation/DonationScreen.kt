@@ -1,11 +1,18 @@
 package com.example.rsq.ui.donation
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.util.Log
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -14,21 +21,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.platform.LocalContext
 import com.example.rsq.data.model.Donation
+import com.example.rsq.ui.common.EmptyStateView
+import com.example.rsq.ui.common.ErrorView
+import com.example.rsq.ui.common.LoadingView
 import com.example.rsq.ui.viewmodel.DonationViewModel
 import com.example.rsq.ui.viewmodel.PaymentState
 import com.example.rsq.ui.viewmodel.UiState
 import com.razorpay.Checkout
 import org.json.JSONObject
-import android.app.Activity
-import com.example.rsq.ui.common.LoadingView
-import com.example.rsq.ui.common.ErrorView
-import com.example.rsq.ui.common.EmptyStateView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,11 +49,27 @@ fun DonationScreen(
     val paymentState by viewModel.paymentState.collectAsState()
     val context = LocalContext.current
 
+    var showAmountDialog by remember { mutableStateOf(false) }
+
     // Trigger Razorpay Checkout when Order is created
     LaunchedEffect(paymentState) {
-        if (paymentState is PaymentState.OrderCreated) {
-            val state = paymentState as PaymentState.OrderCreated
-            startRazorpayCheckout(context, state.orderId, state.amount, userName, userEmail)
+        val currentState = paymentState
+        when (currentState) {
+            is PaymentState.OrderCreated -> {
+                Log.d("DONATION", "[DONATION] PaymentState.OrderCreated received")
+                startRazorpayCheckout(context, currentState.orderId, currentState.amount, userName, userEmail)
+            }
+            is PaymentState.Success -> {
+                Log.d("DONATION", "[DONATION] PaymentState.Success received")
+                Toast.makeText(context, "Thank you! Contribution verified successfully.", Toast.LENGTH_LONG).show()
+                viewModel.resetPaymentState()
+            }
+            is PaymentState.Failure -> {
+                Log.e("DONATION", "[DONATION] PaymentState.Failure: ${currentState.message}")
+                Toast.makeText(context, currentState.message, Toast.LENGTH_LONG).show()
+                viewModel.resetPaymentState()
+            }
+            else -> {}
         }
     }
 
@@ -73,7 +95,7 @@ fun DonationScreen(
                 is UiState.Empty -> EmptyStateView(
                     message = "No donation history available.",
                     actionLabel = "Make a Contribution",
-                    onAction = { viewModel.startDonationFlow(100.0, userName, userId) }
+                    onAction = { showAmountDialog = true }
                 )
                 is UiState.Error -> ErrorView(state.message) { viewModel.loadData() }
                 is UiState.Success -> {
@@ -89,10 +111,9 @@ fun DonationScreen(
                             EnhancedTotalCard(
                                 amount = summary.totalAmount,
                                 currency = summary.currency,
-                                onDonate = { viewModel.startDonationFlow(100.0, userName, userId) }
+                                onDonate = { showAmountDialog = true }
                             )
                         }
-// ... and so on
 
                         item {
                             Row(
@@ -119,7 +140,100 @@ fun DonationScreen(
             }
         }
     }
+
+    if (showAmountDialog) {
+        DonationAmountDialog(
+            onDismiss = { showAmountDialog = false },
+            onConfirm = { amount ->
+                Log.d("DONATION", "[DONATION] Donate clicked")
+                Log.d("DONATION", "[DONATION] amount = $amount")
+                showAmountDialog = false
+                viewModel.startDonationFlow(amount, userName, userId)
+            }
+        )
+    }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DonationAmountDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (Double) -> Unit
+) {
+    var selectedAmount by remember { mutableStateOf<Double?>(null) }
+    var customAmount by remember { mutableStateOf("") }
+    
+    val presets = listOf(100.0, 500.0, 1000.0, 2000.0)
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select Donation Amount") },
+        text = {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    presets.take(2).forEach { preset ->
+                        FilterChip(
+                            selected = selectedAmount == preset,
+                            onClick = { 
+                                selectedAmount = preset
+                                customAmount = ""
+                            },
+                            label = { Text("₹${preset.toInt()}") }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    presets.drop(2).forEach { preset ->
+                        FilterChip(
+                            selected = selectedAmount == preset,
+                            onClick = { 
+                                selectedAmount = preset
+                                customAmount = ""
+                            },
+                            label = { Text("₹${preset.toInt()}") }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = customAmount,
+                    onValueChange = { 
+                        customAmount = it
+                        selectedAmount = null
+                    },
+                    label = { Text("Custom Amount (₹)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val amount = selectedAmount ?: customAmount.toDoubleOrNull()
+                    if (amount != null && amount > 0) {
+                        onConfirm(amount)
+                    }
+                },
+                enabled = (selectedAmount != null) || (customAmount.toDoubleOrNull()?.let { it > 0 } == true)
+            ) {
+                Text("Donate")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
 
 @Composable
 fun EnhancedTotalCard(amount: Double, currency: String, onDonate: () -> Unit) {
@@ -189,7 +303,7 @@ fun EnhancedDonationCard(donation: Donation) {
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier
@@ -229,6 +343,24 @@ fun EnhancedDonationCard(donation: Donation) {
                     Spacer(modifier = Modifier.width(8.dp))
                     DonationStatusBadge(donation.status)
                 }
+                
+                donation.paymentId?.let { pid ->
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Ref: $pid",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                donation.orderId?.let { oid ->
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Order: $oid",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Text(
@@ -242,13 +374,27 @@ fun EnhancedDonationCard(donation: Donation) {
 }
 
 fun startRazorpayCheckout(
-    context: android.content.Context, 
+    context: Context,
     orderId: String, 
     amount: Double, 
     userName: String,
     userEmail: String
 ) {
-    val activity = context as? Activity ?: return
+    var activity: Activity? = context as? Activity
+    if (activity == null && context is ContextWrapper) {
+        var base = context.baseContext
+        while (base is ContextWrapper && base !is Activity) {
+            base = base.baseContext
+        }
+        activity = base as? Activity
+    }
+
+    if (activity == null) {
+        Log.e("DONATION", "[DONATION] Error: Cannot find Activity from Context to start Razorpay!")
+        Toast.makeText(context, "Error: Cannot open payment - Activity not found", Toast.LENGTH_LONG).show()
+        return
+    }
+
     val checkout = Checkout()
     checkout.setKeyID("rzp_test_TVvZzrCuli56f5") // Razorpay TEST Key ID
 
@@ -262,7 +408,7 @@ fun startRazorpayCheckout(
         options.put("currency", "INR")
         
         // Use Math.round to avoid floating point precision issues during conversion
-        val amountInPaise = Math.round(amount * 100)
+        val amountInPaise = Math.round(amount * 100).toInt()
         options.put("amount", amountInPaise)
         
         // Prefill details improve payment method visibility (especially UPI)
@@ -275,9 +421,11 @@ fun startRazorpayCheckout(
         // Force local to India to ensure domestic test cards work
         options.put("send_sms_hash", true)
         
+        Log.d("DONATION", "[DONATION] opening Razorpay Checkout")
         checkout.open(activity, options)
     } catch (e: Exception) {
-        android.util.Log.e("Razorpay", "Error in starting Razorpay Checkout", e)
+        Log.e("Razorpay", "Error in starting Razorpay Checkout", e)
+        Toast.makeText(context, "Error starting Razorpay Checkout: ${e.message}", Toast.LENGTH_LONG).show()
     }
 }
 
