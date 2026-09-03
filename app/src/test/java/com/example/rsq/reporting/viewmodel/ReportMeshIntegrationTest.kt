@@ -1,13 +1,12 @@
 package com.example.rsq.reporting.viewmodel
 
 import android.app.Application
-import com.example.rsq.data.model.Priority
+import androidx.lifecycle.SavedStateHandle
 import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.domain.MeshTransport
 import com.example.rsq.mesh.domain.MeshMessageRepository
 import com.example.rsq.mesh.domain.NodeIdentityProvider
 import com.example.rsq.mesh.model.MeshMessage
-import com.example.rsq.mesh.model.MeshMessageType
 import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.reporting.data.ReportRepository
 import com.example.rsq.reporting.data.LocalReportRepository
@@ -15,11 +14,14 @@ import com.example.rsq.reporting.data.local.ReportDao
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.model.SyncStatus
+import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.sync.SyncScheduler
+import com.example.rsq.util.ConnectivityObserver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -38,6 +40,7 @@ class ReportMeshIntegrationTest {
     private lateinit var fakeMeshTransport: FakeMeshTransport
     private lateinit var fakeMeshRepository: FakeMeshMessageRepository
     private lateinit var fakeIdentityProvider: FakeNodeIdentityProvider
+    private lateinit var fakeConnectivityObserver: FakeConnectivityObserver
     private lateinit var mockApplication: Application
     private lateinit var relayEngine: MeshRelayEngine
     private lateinit var viewModel: ReportViewModel
@@ -51,6 +54,7 @@ class ReportMeshIntegrationTest {
         fakeMeshTransport = FakeMeshTransport()
         fakeMeshRepository = FakeMeshMessageRepository()
         fakeIdentityProvider = FakeNodeIdentityProvider("local-node")
+        fakeConnectivityObserver = FakeConnectivityObserver()
         mockApplication = mock<Application>()
     }
 
@@ -62,11 +66,19 @@ class ReportMeshIntegrationTest {
     @Test
     fun `submitting a report should trigger local save and mesh broadcast then return success immediately`() = runTest(testDispatcher) {
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
-        viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
+        viewModel = ReportViewModel(
+            application = mockApplication,
+            savedStateHandle = SavedStateHandle(),
+            repository = fakeReportRepository,
+            localRepository = fakeLocalRepository,
+            connectivityObserver = fakeConnectivityObserver,
+            relayEngine = relayEngine,
+            identityProvider = fakeIdentityProvider
+        )
 
         val report = createTestReport("rep-1")
 
-        viewModel.submitReport(report)
+        viewModel.submitReport(report, emptyList())
         advanceUntilIdle()
 
         // 1. Verify Local Save happened
@@ -89,10 +101,18 @@ class ReportMeshIntegrationTest {
     @Test
     fun `blank report ID should generate exactly one stable UUID`() = runTest(testDispatcher) {
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
-        viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
+        viewModel = ReportViewModel(
+            application = mockApplication,
+            savedStateHandle = SavedStateHandle(),
+            repository = fakeReportRepository,
+            localRepository = fakeLocalRepository,
+            connectivityObserver = fakeConnectivityObserver,
+            relayEngine = relayEngine,
+            identityProvider = fakeIdentityProvider
+        )
         val report = Report(userId = "u1", title = "T", description = "D")
 
-        viewModel.submitReport(report)
+        viewModel.submitReport(report, emptyList())
         advanceUntilIdle()
 
         val savedId = fakeLocalRepository.savedReports[0].id
@@ -111,10 +131,18 @@ class ReportMeshIntegrationTest {
     @Test
     fun `existing report ID should be preserved across Room and Mesh`() = runTest(testDispatcher) {
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
-        viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
+        viewModel = ReportViewModel(
+            application = mockApplication,
+            savedStateHandle = SavedStateHandle(),
+            repository = fakeReportRepository,
+            localRepository = fakeLocalRepository,
+            connectivityObserver = fakeConnectivityObserver,
+            relayEngine = relayEngine,
+            identityProvider = fakeIdentityProvider
+        )
         val report = Report(id = "preserved-id", userId = "u1", title = "T", description = "D")
 
-        viewModel.submitReport(report)
+        viewModel.submitReport(report, emptyList())
         advanceUntilIdle()
 
         assertEquals("preserved-id", fakeLocalRepository.savedReports[0].id)
@@ -124,12 +152,20 @@ class ReportMeshIntegrationTest {
     @Test
     fun `mesh failure should not prevent local success state`() = runTest(testDispatcher) {
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
-        viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
+        viewModel = ReportViewModel(
+            application = mockApplication,
+            savedStateHandle = SavedStateHandle(),
+            repository = fakeReportRepository,
+            localRepository = fakeLocalRepository,
+            connectivityObserver = fakeConnectivityObserver,
+            relayEngine = relayEngine,
+            identityProvider = fakeIdentityProvider
+        )
         fakeMeshTransport.shouldFail = true
 
         val report = createTestReport("res-mesh-fail")
 
-        viewModel.submitReport(report)
+        viewModel.submitReport(report, emptyList())
         advanceUntilIdle()
 
         val state = viewModel.reportState.value as ReportState.Success
@@ -139,17 +175,20 @@ class ReportMeshIntegrationTest {
 
     @Test
     fun `SyncScheduler failure should not prevent success state if Room save succeeded`() = runTest(testDispatcher) {
-        // We can simulate an object throw by using a special "fail mode" in our fake scheduler logic if we had one,
-        // but here we check the ViewModel's safe try-catch.
-        // We'll use a mocked Application that throws on scheduleSync if it were a mockable dependency,
-        // but since it's an object we depend on the implemented try-catch.
-
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
-        viewModel = ReportViewModel(mockApplication, fakeReportRepository, fakeLocalRepository, relayEngine, fakeIdentityProvider)
+        viewModel = ReportViewModel(
+            application = mockApplication,
+            savedStateHandle = SavedStateHandle(),
+            repository = fakeReportRepository,
+            localRepository = fakeLocalRepository,
+            connectivityObserver = fakeConnectivityObserver,
+            relayEngine = relayEngine,
+            identityProvider = fakeIdentityProvider
+        )
 
         val report = createTestReport("res-sched-fail")
 
-        viewModel.submitReport(report)
+        viewModel.submitReport(report, emptyList())
         advanceUntilIdle()
 
         // If it didn't crash and returned success, it means the try-catch worked
@@ -172,7 +211,7 @@ class ReportMeshIntegrationTest {
 
     private class FakeLocalReportRepository(dao: ReportDao) : LocalReportRepository(dao) {
         val savedReports = mutableListOf<Report>()
-        override suspend fun saveReport(report: Report, localPath: String?, syncStatus: SyncStatus) {
+        override suspend fun saveReport(report: Report, localPaths: List<String>, syncStatus: SyncStatus) {
             savedReports.add(report)
         }
         override suspend fun updateSyncStatus(id: String, status: SyncStatus) {}
@@ -207,5 +246,9 @@ class ReportMeshIntegrationTest {
 
     private class FakeNodeIdentityProvider(private val id: String) : NodeIdentityProvider {
         override fun getNodeId(): String = id
+    }
+
+    private class FakeConnectivityObserver : ConnectivityObserver {
+        override fun observe(): Flow<ConnectivityObserver.Status> = MutableStateFlow(ConnectivityObserver.Status.Available)
     }
 }

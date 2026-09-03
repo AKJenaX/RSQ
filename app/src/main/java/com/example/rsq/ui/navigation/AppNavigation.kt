@@ -110,6 +110,7 @@ fun AppNavigation() {
     val localReportRepository = remember { LocalReportRepository(localReportDatabase.reportDao()) }
 
     // Repositories
+    val donationRepository = remember { FirestoreDonationRepository() }
     val assignmentRepository = remember { AssignmentRepositoryImpl(localReportDatabase.assignmentDao()) }
     val volunteerRepository = remember { VolunteerRepositoryImpl(localReportDatabase.volunteerDao(), assignmentRepository) }
     val notificationRepository = remember { NotificationRepositoryImpl(localReportDatabase.notificationDao()) }
@@ -498,7 +499,7 @@ fun AppNavigation() {
                             reportRepository = ReportRepository(),
                             authorityRepository = AuthorityRepositoryImpl(
                                 assignmentRepository = assignmentRepository,
-                                donationRepository = DonationRepositoryImpl(),
+                                donationRepository = donationRepository,
                                 localReportRepository = localReportRepository
                             )
                         )
@@ -551,17 +552,17 @@ fun AppNavigation() {
             val donationViewModel: DonationViewModel = viewModel(
                 factory = viewModelFactory {
                     initializer {
-                        DonationViewModel(repository = DonationRepositoryImpl())
+                        DonationViewModel(repository = donationRepository)
                     }
                 }
             )
             DonationScreen(
                 viewModel = donationViewModel,
+                userName = userProfile?.name ?: "Anonymous",
+                userId = authViewModel.getCurrentUserId(),
+                userEmail = userProfile?.email ?: "",
                 onBack = {
                     navController.popBackStack()
-                },
-                onMakeDonation = { amount ->
-                    donationViewModel.makeDonation(amount, userProfile?.name ?: "Anonymous")
                 }
             )
         }

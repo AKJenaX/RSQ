@@ -18,9 +18,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.platform.LocalContext
 import com.example.rsq.data.model.Donation
 import com.example.rsq.ui.viewmodel.DonationViewModel
+import com.example.rsq.ui.viewmodel.PaymentState
 import com.example.rsq.ui.viewmodel.UiState
+import com.razorpay.Checkout
+import org.json.JSONObject
+import android.app.Activity
 import com.example.rsq.ui.common.LoadingView
 import com.example.rsq.ui.common.ErrorView
 import com.example.rsq.ui.common.EmptyStateView
@@ -29,10 +34,22 @@ import com.example.rsq.ui.common.EmptyStateView
 @Composable
 fun DonationScreen(
     viewModel: DonationViewModel,
-    onBack: () -> Unit,
-    onMakeDonation: (Double) -> Unit
+    userName: String,
+    userId: String,
+    userEmail: String,
+    onBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val paymentState by viewModel.paymentState.collectAsState()
+    val context = LocalContext.current
+
+    // Trigger Razorpay Checkout when Order is created
+    LaunchedEffect(paymentState) {
+        if (paymentState is PaymentState.OrderCreated) {
+            val state = paymentState as PaymentState.OrderCreated
+            startRazorpayCheckout(context, state.orderId, state.amount, userName, userEmail)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -53,7 +70,11 @@ fun DonationScreen(
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             when (val state = uiState) {
                 is UiState.Loading -> LoadingView()
-                is UiState.Empty -> EmptyStateView("No donation history available.")
+                is UiState.Empty -> EmptyStateView(
+                    message = "No donation history available.",
+                    actionLabel = "Make a Contribution",
+                    onAction = { viewModel.startDonationFlow(100.0, userName, userId) }
+                )
                 is UiState.Error -> ErrorView(state.message) { viewModel.loadData() }
                 is UiState.Success -> {
                     val (summary, donations) = state.data
@@ -68,9 +89,10 @@ fun DonationScreen(
                             EnhancedTotalCard(
                                 amount = summary.totalAmount,
                                 currency = summary.currency,
-                                onDonate = { onMakeDonation(100.0) }
+                                onDonate = { viewModel.startDonationFlow(100.0, userName, userId) }
                             )
                         }
+// ... and so on
 
                         item {
                             Row(
@@ -210,12 +232,52 @@ fun EnhancedDonationCard(donation: Donation) {
             }
 
             Text(
-                text = "+$${String.format("%.2f", donation.amount)}",
+                text = "+₹${String.format("%.2f", donation.amount)}",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Black,
                 color = Color(0xFF388E3C)
             )
         }
+    }
+}
+
+fun startRazorpayCheckout(
+    context: android.content.Context, 
+    orderId: String, 
+    amount: Double, 
+    userName: String,
+    userEmail: String
+) {
+    val activity = context as? Activity ?: return
+    val checkout = Checkout()
+    checkout.setKeyID("rzp_test_TVvZzrCuli56f5") // Razorpay TEST Key ID
+
+    try {
+        val options = JSONObject()
+        options.put("name", "RSQ Relief Fund")
+        options.put("description", "Emergency Response Contribution")
+        options.put("image", "https://s3.amazonaws.com/rzp-mobile/images/rzp.png")
+        options.put("order_id", orderId)
+        options.put("theme.color", "#1976D2")
+        options.put("currency", "INR")
+        
+        // Use Math.round to avoid floating point precision issues during conversion
+        val amountInPaise = Math.round(amount * 100)
+        options.put("amount", amountInPaise)
+        
+        // Prefill details improve payment method visibility (especially UPI)
+        val prefill = JSONObject()
+        prefill.put("name", userName)
+        prefill.put("email", userEmail.ifBlank { "test@example.com" })
+        prefill.put("contact", "9999999999") // Required for some UPI flows in test mode
+        options.put("prefill", prefill)
+
+        // Force local to India to ensure domestic test cards work
+        options.put("send_sms_hash", true)
+        
+        checkout.open(activity, options)
+    } catch (e: Exception) {
+        android.util.Log.e("Razorpay", "Error in starting Razorpay Checkout", e)
     }
 }
 

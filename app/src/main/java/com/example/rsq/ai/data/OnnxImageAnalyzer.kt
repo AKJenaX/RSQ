@@ -42,17 +42,18 @@ class OnnxImageAnalyzer(
         try {
             Log.d("OnnxImageAnalyzer", "Loading model asset: $modelFileName")
             val modelBytes = context.assets.open(modelFileName).readBytes()
+            Log.d("OnnxImageAnalyzer", "Model bytes read successfully (${modelBytes.size} bytes). Creating session...")
             ortSession = ortEnv.createSession(modelBytes)
 
             ortSession?.let { session ->
                 Log.d("OnnxImageAnalyzer", "ONNX session initialization succeeded")
                 Log.d("OnnxImageAnalyzer", "Input names: ${session.inputNames}")
-                // Using session.numInputs and iterating if needed, but for now just basic success log
-                // since some metadata APIs might vary by ORT version.
             }
         } catch (e: Exception) {
-            Log.e("OnnxImageAnalyzer", "Failed to load model", e)
-            e.printStackTrace()
+            Log.e("OnnxImageAnalyzer", "Failed to load model due to Exception", e)
+        } catch (t: Throwable) {
+            // Catching Throwable to handle native ORT errors that might not be caught by Exception
+            Log.e("OnnxImageAnalyzer", "CRITICAL_MODEL_LOAD_FAILURE: Caught Throwable during model load", t)
         }
     }
 

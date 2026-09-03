@@ -53,7 +53,9 @@ fun ErrorView(message: String, onRetry: () -> Unit) {
 fun EmptyStateView(
     message: String,
     icon: ImageVector = Icons.Default.Inbox,
-    description: String? = null
+    description: String? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -89,6 +91,16 @@ fun EmptyStateView(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
+        }
+
+        if (actionLabel != null && onAction != null) {
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(
+                onClick = onAction,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(actionLabel, fontWeight = FontWeight.ExtraBold)
+            }
         }
     }
 }

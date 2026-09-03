@@ -48,7 +48,11 @@ class AuthorityViewModel(
                 notificationRepository.getUnreadCount(firebaseUid)
             ) { stats, reports, assignments, volunteers, unread ->
                 AuthorityData(stats, reports, assignments, volunteers, unread)
-            }.collect { data ->
+            }
+            .catch { e ->
+                _uiState.value = UiState.Error("Failed to load authority data: ${e.message}")
+            }
+            .collect { data ->
                 _uiState.value = UiState.Success(data)
             }
         }
