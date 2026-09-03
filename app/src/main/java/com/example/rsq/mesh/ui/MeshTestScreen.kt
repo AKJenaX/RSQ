@@ -84,12 +84,38 @@ fun MeshTestScreen(
             // Mesh Diagnostics Section
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f))
+                colors = CardDefaults.cardColors(
+                    containerColor = if (diagnostics.isMockMode)
+                        Color(0xFFFFF8E1) // Light yellow tint for mock test mode
+                    else
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
+                )
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Mesh Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Mesh Diagnostics", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        if (diagnostics.isMockMode) {
+                            Surface(
+                                color = Color(0xFFF57F17),
+                                shape = MaterialTheme.shapes.extraSmall
+                            ) {
+                                Text(
+                                    text = "EMULATOR TEST MODE",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
 
-                    DiagnosticRow("Transport", diagnostics.status.name)
+                    DiagnosticRow("Transport Mode", if (diagnostics.isMockMode) "MOCK (SIMULATED)" else "REAL (NEARBY)")
+                    DiagnosticRow("Status", diagnostics.status.name)
                     DiagnosticRow("Advertising", if (diagnostics.isAdvertising) "RUNNING" else "STOPPED")
                     DiagnosticRow("Discovery", if (diagnostics.isDiscovering) "RUNNING" else "STOPPED")
                     DiagnosticRow("Connected Peers", diagnostics.connectedPeerCount.toString())

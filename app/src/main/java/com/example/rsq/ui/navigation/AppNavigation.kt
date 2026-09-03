@@ -30,6 +30,7 @@ import com.example.rsq.auth.ui.LoginScreen
 import com.example.rsq.auth.ui.RegisterScreen
 import com.example.rsq.auth.viewmodel.AuthViewModel
 import com.example.rsq.mesh.data.LocalMeshMessageRepository
+import com.example.rsq.mesh.data.MeshTransportFactory
 import com.example.rsq.mesh.data.NearbyMeshTransport
 import com.example.rsq.mesh.data.NodeIdentityRepository
 import com.example.rsq.mesh.domain.MeshRelayEngine
@@ -103,7 +104,7 @@ fun AppNavigation() {
     // Mesh dependencies
     val meshIdentityProvider = remember { NodeIdentityRepository(context) }
     val meshMessageRepository = remember { LocalMeshMessageRepository(context) }
-    val meshTransport = remember { NearbyMeshTransport(context, meshIdentityProvider) }
+    val meshTransport = remember { MeshTransportFactory.createTransport(context, meshIdentityProvider) }
 
     // Local database
     val localReportDatabase = remember { LocalReportDatabase.getDatabase(context) }
@@ -362,6 +363,7 @@ fun AppNavigation() {
                 onNavigateToHistory = { navController.navigate(Screen.ReportHistory.route) },
                 onNavigateToAssignments = { navController.navigate(Screen.Assignment.route) },
                 onNavigateToNotifications = { navController.navigate(Screen.Notification.route) },
+                onNavigateToMeshTest = { navController.navigate(Screen.MeshTest.route) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Screen.Login.route) {

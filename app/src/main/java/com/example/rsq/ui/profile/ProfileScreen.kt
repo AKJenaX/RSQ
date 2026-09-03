@@ -30,6 +30,7 @@ fun ProfileScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToAssignments: () -> Unit,
     onNavigateToNotifications: () -> Unit,
+    onNavigateToMeshTest: () -> Unit,
     onLogout: () -> Unit
 ) {
     val userProfile by viewModel.currentUserProfile.collectAsState()
@@ -127,6 +128,12 @@ fun ProfileScreen(
                 icon = Icons.Default.Notifications,
                 label = stringResource(R.string.alert_notifications),
                 onClick = onNavigateToNotifications
+            )
+
+            ProfileActionButton(
+                icon = Icons.Default.CellTower,
+                label = "Offline Mesh Test",
+                onClick = onNavigateToMeshTest
             )
 
             Spacer(modifier = Modifier.height(48.dp))

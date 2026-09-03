@@ -16,5 +16,7 @@ data class MeshDiagnostics(
     val lastDiscoveredEndpoint: String? = null,
     val lastConnectionEvent: String? = null,
     val lastError: String? = null,
-    val connectedPeerCount: Int = 0
+    val connectedPeerCount: Int = 0,
+    val isMockMode: Boolean = false,
+    val transportName: String = "Nearby Connections"
 )

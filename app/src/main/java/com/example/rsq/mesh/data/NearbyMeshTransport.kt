@@ -1,12 +1,15 @@
 package com.example.rsq.mesh.data
 
+import android.bluetooth.BluetoothAdapter
 import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
 import com.example.rsq.mesh.domain.MeshTransport
 import com.example.rsq.mesh.domain.NodeIdentityProvider
 import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.mesh.model.MeshMessage
 import com.example.rsq.mesh.model.MeshTransportStatus
+import com.example.rsq.mesh.service.MeshForegroundService
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.*
 import kotlinx.coroutines.*
@@ -63,13 +66,43 @@ class NearbyMeshTransport(
             return
         }
 
+        val hwError = checkHardwareAndPermissions()
+        if (hwError != null) {
+            Log.e(TAG, "Cannot start Nearby Mesh Transport: $hwError")
+            updateDiagnostics { it.copy(lastError = hwError) }
+            updateStatus(MeshTransportStatus.ERROR)
+            return
+        }
+
         Log.i(TAG, "Starting Nearby Mesh Transport for Node: $localNodeId")
         updateStatus(MeshTransportStatus.STARTING)
 
         transportScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+        // Optionally start Foreground Service if context permits
+        try {
+            MeshForegroundService.startService(context)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not start MeshForegroundService: ${e.message}")
+        }
+
         startAdvertising()
         startDiscovery()
+    }
+
+    private fun checkHardwareAndPermissions(): String? {
+        val pm = context.packageManager
+        if (!pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH) &&
+            !pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
+            return "Device lacks Bluetooth hardware capability"
+        }
+
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+            return "Bluetooth is turned off"
+        }
+
+        return null
     }
 
     override fun stop() {
