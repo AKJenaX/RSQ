@@ -33,6 +33,7 @@ class AuthorityViewModel(
     )
 
     init {
+        volunteerRepository.startRealtimeVolunteerSync()
         loadData()
     }
 
@@ -44,7 +45,7 @@ class AuthorityViewModel(
                 authorityRepository.getDashboardStats(),
                 authorityRepository.getRecentReports(),
                 assignmentRepository.getAssignments(),
-                volunteerRepository.getAllVolunteers(),
+                volunteerRepository.getAvailableVolunteers(),
                 notificationRepository.getUnreadCount(firebaseUid)
             ) { stats, reports, assignments, volunteers, unread ->
                 AuthorityData(stats, reports, assignments, volunteers, unread)
@@ -60,6 +61,9 @@ class AuthorityViewModel(
 
     fun assignVolunteer(report: RecentReport, volunteer: Volunteer) {
         viewModelScope.launch {
+            val updatedTime = System.currentTimeMillis()
+            val volunteerUid = volunteer.firebaseUid ?: volunteer.id
+
             // Use createAssignment if we want to provide full details from the RecentReport
             assignmentRepository.createAssignment(
                 Assignment(
@@ -73,8 +77,10 @@ class AuthorityViewModel(
                     status = AssignmentStatus.ASSIGNED,
                     priority = report.priority,
                     assignedTime = "Just now",
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
+                    createdAt = updatedTime,
+                    updatedAt = updatedTime,
+                    volunteerFirebaseUid = volunteerUid,
+                    authorityId = firebaseUid
                 )
             )
 
@@ -98,5 +104,10 @@ class AuthorityViewModel(
             )
             notificationRepository.addNotification(notification)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        volunteerRepository.stopRealtimeVolunteerSync()
     }
 }

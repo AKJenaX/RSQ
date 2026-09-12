@@ -10,5 +10,6 @@ data class User(
     val email: String = "",
     val role: String = "",
     val isAuthorized: Boolean = false,
+    val isAvailable: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )

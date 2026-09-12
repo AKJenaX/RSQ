@@ -4,6 +4,8 @@ import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.mesh.model.MeshMessage
 import kotlinx.coroutines.flow.Flow
 
+import java.io.File
+
 /**
  * Interface defining the essential operations for any offline transport layer
  * (e.g., Bluetooth, Wi-Fi Direct, Nearby Connections).
@@ -25,9 +27,9 @@ interface MeshTransport {
     fun discoverPeers()
 
     /**
-     * Transmits a [MeshMessage] to reachable peers.
+     * Transmits a [MeshMessage] and optional media files to reachable peers.
      */
-    suspend fun sendMessage(message: MeshMessage): Result<Unit>
+    suspend fun sendMessage(message: MeshMessage, mediaFiles: List<File> = emptyList()): Result<Unit>
 
     /**
      * Provides a stream of incoming messages received from the mesh network.

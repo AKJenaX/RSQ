@@ -37,7 +37,7 @@ fun VolunteerDashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Responder Hub", fontWeight = FontWeight.Black) },
+                title = { Text("Responder Dashboard", fontWeight = FontWeight.Black) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
@@ -76,7 +76,8 @@ fun VolunteerDashboardScreen(
                         volunteer = data.volunteer,
                         assignments = data.assignments,
                         onNavigateToAssignments = onNavigateToAssignments,
-                        onAcceptAssignment = { viewModel.acceptAssignment(it) }
+                        onAcceptAssignment = { viewModel.acceptAssignment(it) },
+                        onToggleAvailability = { viewModel.toggleAvailability(it) }
                     )
                 }
             }
@@ -89,7 +90,8 @@ private fun VolunteerContent(
     volunteer: Volunteer,
     assignments: List<Assignment>,
     onNavigateToAssignments: () -> Unit,
-    onAcceptAssignment: (String) -> Unit
+    onAcceptAssignment: (String) -> Unit,
+    onToggleAvailability: (Boolean) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -99,7 +101,36 @@ private fun VolunteerContent(
         contentPadding = PaddingValues(16.dp)
     ) {
         item {
-            VolunteerHeader(volunteer.name)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                VolunteerHeader(volunteer.name)
+                
+                // Material 3 Availability Toggle
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = if (volunteer.isAvailable) "ON DUTY" else "OFF DUTY",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (volunteer.isAvailable) Color(0xFF388E3C) else Color.Gray
+                    )
+                    Switch(
+                        checked = volunteer.isAvailable,
+                        onCheckedChange = { onToggleAvailability(it) },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = Color(0xFF388E3C),
+                            uncheckedThumbColor = Color.White,
+                            uncheckedTrackColor = Color.Gray
+                        )
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(16.dp))
             SummaryGrid(volunteer)
         }
@@ -202,12 +233,41 @@ private fun AssignmentCard(assignment: Assignment, onAccept: () -> Unit) {
                 verticalAlignment = Alignment.Top
             ) {
                 Column {
-                    Text(
-                        text = assignment.id,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = assignment.id,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (assignment.syncState == "PENDING") {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                                color = Color(0xFFFFF3E0),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Sync,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(10.dp),
+                                        tint = Color(0xFFEF6C00)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Pending Sync",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFEF6C00)
+                                    )
+                                }
+                            }
+                        }
+                    }
                     Text(
                         text = assignment.disasterType,
                         style = MaterialTheme.typography.titleLarge,

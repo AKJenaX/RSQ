@@ -25,6 +25,7 @@ import com.example.rsq.util.ConnectivityObserver
 import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.UUID
 
 class ReportViewModel(
@@ -144,7 +145,13 @@ class ReportViewModel(
 
                 // 4. Mesh broadcast (Resilient offline fallback)
                 viewModelScope.launch {
-                    broadcastViaMesh(finalReport)
+                    val result = broadcastViaMesh(finalReport, localPaths)
+                    if (result != null && result.isSuccess) {
+                        Log.i(TAG, "MESH_BROADCAST_SUCCESS: reportId=$reportId")
+                    } else {
+                        val error = result?.exceptionOrNull()?.message ?: "Engine or transport unavailable"
+                        Log.w(TAG, "MESH_BROADCAST_FAILED: reportId=$reportId, reason=$error")
+                    }
                 }
 
                 // 5. Determine communication path based on connectivity
@@ -207,9 +214,10 @@ class ReportViewModel(
         }
     }
 
-    private suspend fun broadcastViaMesh(report: Report): Result<Unit>? {
+    private suspend fun broadcastViaMesh(report: Report, localImagePaths: List<String> = emptyList()): Result<Unit>? {
         val meshMessage = convertToMeshMessage(report)
-        return relayEngine?.broadcastMessage(meshMessage)
+        val mediaFiles = localImagePaths.map { File(it) }.filter { it.exists() }
+        return relayEngine?.broadcastMessage(meshMessage, mediaFiles)
     }
 
     private fun observeMeshTraffic() {

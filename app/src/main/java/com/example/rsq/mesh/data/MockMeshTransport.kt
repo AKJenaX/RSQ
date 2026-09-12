@@ -10,6 +10,8 @@ import com.example.rsq.mesh.model.MeshTransportStatus
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
+import java.io.File
+
 /**
  * DEBUG/TEST-only Transport that simulates peer discovery and message exchange on Android Emulators
  * where physical Bluetooth/Wi-Fi Direct radio capabilities are unavailable.
@@ -92,12 +94,12 @@ class MockMeshTransport(
         }
     }
 
-    override suspend fun sendMessage(message: MeshMessage): Result<Unit> {
+    override suspend fun sendMessage(message: MeshMessage, mediaFiles: List<File>): Result<Unit> {
         if (_connectedPeerCount.value == 0) {
             return Result.failure(IllegalStateException("No connected peers in mock transport"))
         }
 
-        Log.d(TAG, "Simulating send of message ${message.id} from $localNodeId to $MOCK_PEER_ID")
+        Log.d(TAG, "Simulating send of message ${message.id} with ${mediaFiles.size} media files from $localNodeId to $MOCK_PEER_ID")
 
         scope?.launch {
             delay(300) // Small simulated network transmission delay

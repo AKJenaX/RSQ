@@ -3,19 +3,47 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper functions for auth & role verification
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAuthority() {
+      return isAuthenticated() &&
+        getUserData().role == 'AUTHORITY' &&
+        getUserData().isAuthorized == true;
+    }
+
     // =========================
     // USER PROFILES
     // =========================
     match /users/{userId} {
 
-      allow read: if request.auth != null
-                  && request.auth.uid == userId;
+      // A volunteer can read their own profile.
+      // An authorized Authority can read volunteer profiles for the dashboard picker.
+      allow read: if isUser(userId) || isAuthority();
 
-      allow create: if request.auth != null
-                    && request.auth.uid == userId;
+      // Only allow creation of one's own profile
+      allow create: if isUser(userId);
 
-      allow update: if request.auth != null
-                    && request.auth.uid == userId;
+      // Protect role escalation, uid, email, createdAt, and profile immutability:
+      // Users can update their own profile fields (isAvailable, name)
+      // BUT they must not escalate their role or authorization status client-side.
+      allow update: if isUser(userId) &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.isAuthorized == resource.data.isAuthorized &&
+        request.resource.data.firebaseUid == resource.data.firebaseUid &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAvailable', 'name']);
 
       allow delete: if false;
     }
@@ -25,13 +53,58 @@ service cloud.firestore {
     // =========================
     match /reports/{reportId} {
 
-      allow read: if request.auth != null;
+      allow read: if isAuthenticated();
 
-      allow create: if request.auth != null
-                    && request.resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated()
+                  && request.resource.data.userId == request.auth.uid;
 
-      allow update: if request.auth != null;
+      // Hardened Update Rule:
+      // Option 1: Report Owner (Victim) updating their own report's evidence/media while keeping ownership & timestamp immutable.
+      // Option 2: Authorized Authority updating operational report status (e.g. OPEN -> ASSIGNED -> RESOLVED) while keeping ownership & timestamp immutable.
+      allow update: if isAuthenticated() &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.timestamp == resource.data.timestamp &&
+        (
+          // Case 1: Report owner updating their own report
+          (resource.data.userId == request.auth.uid) ||
+          // Case 2: Authorized Authority updating operational report status
+          (isAuthority() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
+        );
 
+      allow delete: if false;
+    }
+
+    // =========================
+    // ASSIGNMENTS
+    // =========================
+    match /assignments/{assignmentId} {
+
+      // Read: Assigned volunteer or active authority users
+      allow read: if isAuthenticated() && (
+        resource.data.volunteerFirebaseUid == request.auth.uid ||
+        isAuthority()
+      );
+
+      // Create: Authenticated users assigning a mission (Authority)
+      allow create: if isAuthenticated() &&
+        isAuthority() &&
+        request.resource.data.authorityId == request.auth.uid;
+
+      // Update: Any authorized authority OR assigned volunteer updating status
+      allow update: if isAuthenticated() && (
+        // Option 1: Authority managing the assignment (immutable IDs & createdAt)
+        (isAuthority() &&
+         request.resource.data.assignmentId == resource.data.assignmentId &&
+         request.resource.data.reportId == resource.data.reportId &&
+         request.resource.data.createdAt == resource.data.createdAt) ||
+        // Option 2: Assigned volunteer updating response status
+        (
+          resource.data.volunteerFirebaseUid == request.auth.uid &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        )
+      );
+
+      // Delete: Strictly prohibited
       allow delete: if false;
     }
 
@@ -44,11 +117,8 @@ service cloud.firestore {
       // Anyone can see the donation history.
       allow read: if true;
 
-      // NEVER allow Android clients to create or modify
-      // donation records.
-      //
-      // Completed donations must only be written by
-      // the FastAPI backend using Firebase Admin SDK.
+      // NEVER allow Android clients to create or modify donation records.
+      // Completed donations must only be written by the FastAPI backend using Firebase Admin SDK.
       allow write: if false;
     }
   }

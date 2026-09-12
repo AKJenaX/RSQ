@@ -112,8 +112,8 @@ fun AppNavigation() {
 
     // Repositories
     val donationRepository = remember { FirestoreDonationRepository() }
-    val assignmentRepository = remember { AssignmentRepositoryImpl(localReportDatabase.assignmentDao()) }
-    val volunteerRepository = remember { VolunteerRepositoryImpl(localReportDatabase.volunteerDao(), assignmentRepository) }
+    val assignmentRepository = remember { AssignmentRepositoryImpl(localReportDatabase.assignmentDao(), connectivityObserver = connectivityObserver) }
+    val volunteerRepository = remember { VolunteerRepositoryImpl(localReportDatabase.volunteerDao(), assignmentRepository, connectivityObserver = connectivityObserver) }
     val notificationRepository = remember { NotificationRepositoryImpl(localReportDatabase.notificationDao()) }
 
     // Global Location Management
@@ -593,6 +593,9 @@ fun AppNavigation() {
                     viewModel = notificationViewModel,
                     onBack = {
                         navController.popBackStack()
+                    },
+                    onNavigateToAssignments = {
+                        navController.navigate(Screen.Assignment.route)
                     }
                 )
             } else {

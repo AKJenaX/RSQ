@@ -2,6 +2,7 @@ package com.example.rsq.mesh.domain
 
 import com.example.rsq.data.model.Priority
 import com.example.rsq.mesh.model.MeshDiagnostics
+import com.example.rsq.mesh.model.MeshMediaMetadata
 import com.example.rsq.mesh.model.MeshMessage
 import com.example.rsq.mesh.model.MeshMessageType
 import com.example.rsq.mesh.model.MeshRelayEvent
@@ -13,10 +14,16 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MeshRelayEngineTest {
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var fakeTransport: FakeMeshTransport
@@ -113,6 +120,65 @@ class MeshRelayEngineTest {
         assertEquals(2, relayed.ttl)
     }
 
+    @Test
+    fun `When media file is verified on intermediate node, relayEngine should forward media file to next hop`() = runTest(testDispatcher) {
+        engine = MeshRelayEngine(fakeTransport, fakeRepository, fakeIdentityProvider, backgroundScope)
+        
+        val meta = MeshMediaMetadata(
+            mediaId = "MED_100",
+            reportId = "REP_100",
+            filename = "evidence.jpg",
+            mimeType = "image/jpeg",
+            sizeBytes = 5000L,
+            nearbyPayloadId = 1111L,
+            checksum = "abc123sha256"
+        )
+        val message = createTestMessage("REP_100", ttl = 2).copy(mediaItems = listOf(meta))
+
+        // Phase 1: Intermediate node receives BYTES message
+        fakeTransport.emitMessage(message)
+
+        // Verify Phase 1 metadata relayed
+        assertEquals(1, fakeTransport.sentMessages.size)
+        assertEquals(1, fakeTransport.sentMessages[0].mediaItems.size)
+        assertEquals("MED_100", fakeTransport.sentMessages[0].mediaItems[0].mediaId)
+
+        // Phase 2: Intermediate node verifies & saves media file
+        val mockSavedFile = tempFolder.newFile("media_REP_100_MED_100.jpg")
+        mockSavedFile.writeText("mock verified image bytes")
+
+        engine.onMediaFileVerified("REP_100", "MED_100", mockSavedFile)
+
+        // Verify Phase 2 media file forwarded to next hop
+        assertEquals(2, fakeTransport.sentMessages.size)
+        val nonBytesMediaTransfers = fakeTransport.sentMediaFiles.filter { it.isNotEmpty() }
+        assertEquals(1, nonBytesMediaTransfers.size)
+        assertEquals(1, nonBytesMediaTransfers[0].size)
+        assertEquals(mockSavedFile.absolutePath, nonBytesMediaTransfers[0][0].absolutePath)
+    }
+
+    @Test
+    fun `Multi-hop relay should preserve media metadata list and forward multiple media files`() = runTest(testDispatcher) {
+        engine = MeshRelayEngine(fakeTransport, fakeRepository, fakeIdentityProvider, backgroundScope)
+
+        val meta1 = MeshMediaMetadata("MED_1", "REP_200", "photo1.jpg", "image/jpeg", 1000L, 11L, "hash1")
+        val meta2 = MeshMediaMetadata("MED_2", "REP_200", "photo2.jpg", "image/jpeg", 2000L, 22L, "hash2")
+        val message = createTestMessage("REP_200", ttl = 3).copy(mediaItems = listOf(meta1, meta2))
+
+        fakeTransport.emitMessage(message)
+
+        val file1 = tempFolder.newFile("photo1.jpg")
+        val file2 = tempFolder.newFile("photo2.jpg")
+
+        engine.onMediaFileVerified("REP_200", "MED_1", file1)
+        engine.onMediaFileVerified("REP_200", "MED_2", file2)
+
+        assertEquals(3, fakeTransport.sentMessages.size)
+        assertEquals(2, fakeTransport.sentMessages[0].mediaItems.size)
+        assertEquals("photo1.jpg", fakeTransport.sentMediaFiles[1][0].name)
+        assertEquals("photo2.jpg", fakeTransport.sentMediaFiles[2][0].name)
+    }
+
     private fun createTestMessage(id: String, ttl: Int): MeshMessage {
         return MeshMessage(
             id = id,
@@ -131,6 +197,7 @@ class MeshRelayEngineTest {
     // Fakes
     private class FakeMeshTransport : MeshTransport {
         val sentMessages = mutableListOf<MeshMessage>()
+        val sentMediaFiles = mutableListOf<List<File>>()
         private val incomingFlow = MutableSharedFlow<MeshMessage>(replay = 10)
 
         suspend fun emitMessage(msg: MeshMessage) = incomingFlow.emit(msg)
@@ -138,8 +205,9 @@ class MeshRelayEngineTest {
         override fun start() {}
         override fun stop() {}
         override fun discoverPeers() {}
-        override suspend fun sendMessage(message: MeshMessage): Result<Unit> {
+        override suspend fun sendMessage(message: MeshMessage, mediaFiles: List<File>): Result<Unit> {
             sentMessages.add(message)
+            sentMediaFiles.add(mediaFiles)
             return Result.success(Unit)
         }
         override fun observeIncomingMessages(): Flow<MeshMessage> = incomingFlow

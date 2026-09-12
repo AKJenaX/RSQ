@@ -6,6 +6,8 @@ import com.example.rsq.data.model.Priority
 import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.domain.MeshTransport
 import com.example.rsq.mesh.domain.NodeIdentityProvider
+import com.example.rsq.mesh.data.NearbyMeshTransport
+import com.example.rsq.mesh.model.MediaTransferUiState
 import com.example.rsq.mesh.model.MeshDiagnostics
 import com.example.rsq.mesh.model.MeshMessage
 import com.example.rsq.mesh.model.MeshMessageType
@@ -29,6 +31,12 @@ class MeshTestViewModel(
     val diagnostics: StateFlow<MeshDiagnostics> = transport.observeDiagnostics()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), MeshDiagnostics())
 
+    val activeMediaTransfers: StateFlow<List<MediaTransferUiState>> = if (transport is NearbyMeshTransport) {
+        transport.pendingMediaRegistry.mediaTransfers
+    } else {
+        MutableStateFlow<List<MediaTransferUiState>>(emptyList()).asStateFlow()
+    }
+
     private val _lastReceivedMessage = MutableStateFlow<MeshMessage?>(null)
     val lastReceivedMessage: StateFlow<MeshMessage?> = _lastReceivedMessage.asStateFlow()
 
@@ -41,6 +49,10 @@ class MeshTestViewModel(
     private var isStarted = false
 
     init {
+        if (transport is NearbyMeshTransport) {
+            transport.pendingMediaRegistry.relayEngine = relayEngine
+        }
+
         viewModelScope.launch {
             relayEngine.processedMessages.collect { message ->
                 _lastReceivedMessage.value = message

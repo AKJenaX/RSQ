@@ -29,7 +29,8 @@ import com.example.rsq.ui.common.ErrorView
 @Composable
 fun NotificationScreen(
     viewModel: NotificationViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onNavigateToAssignments: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -68,7 +69,12 @@ fun NotificationScreen(
                         items(state.data) { notification ->
                             EnhancedNotificationCard(
                                 notification = notification,
-                                onClick = { viewModel.markAsRead(notification.id) }
+                                onClick = {
+                                    viewModel.markAsRead(notification.id)
+                                    if (notification.type == NotificationType.ASSIGNMENT_RECEIVED) {
+                                        onNavigateToAssignments()
+                                    }
+                                }
                             )
                         }
                     }

@@ -20,14 +20,20 @@ interface AssignmentDao {
     @Query("SELECT * FROM assignments WHERE reportId = :reportId")
     fun getAssignmentsForReport(reportId: String): Flow<List<AssignmentEntity>>
 
+    @Query("SELECT * FROM assignments WHERE syncState = 'PENDING'")
+    suspend fun getPendingAssignmentsOneShot(): List<AssignmentEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAssignment(assignment: AssignmentEntity)
 
     @Update
     suspend fun updateAssignment(assignment: AssignmentEntity)
 
-    @Query("UPDATE assignments SET status = :status, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun updateAssignmentStatus(id: String, status: String, updatedAt: Long)
+    @Query("UPDATE assignments SET status = :status, updatedAt = :updatedAt, syncState = :syncState WHERE id = :id")
+    suspend fun updateAssignmentStatusAndSyncState(id: String, status: String, updatedAt: Long, syncState: String)
+
+    @Query("UPDATE assignments SET syncState = :syncState WHERE id = :id")
+    suspend fun updateAssignmentSyncState(id: String, syncState: String)
 }
 
 @Dao
@@ -44,8 +50,20 @@ interface VolunteerDao {
     @Query("SELECT * FROM volunteers")
     fun getAllVolunteers(): Flow<List<VolunteerEntity>>
 
+    @Query("SELECT * FROM volunteers WHERE isAvailable = 1")
+    fun getAvailableVolunteers(): Flow<List<VolunteerEntity>>
+
+    @Query("SELECT * FROM volunteers WHERE syncState = 'PENDING'")
+    suspend fun getPendingVolunteersOneShot(): List<VolunteerEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertVolunteer(volunteer: VolunteerEntity)
+
+    @Query("UPDATE volunteers SET isAvailable = :isAvailable, syncState = :syncState WHERE firebaseUid = :uid")
+    suspend fun updateAvailabilityAndSyncState(uid: String, isAvailable: Boolean, syncState: String)
+
+    @Query("UPDATE volunteers SET syncState = :syncState WHERE firebaseUid = :uid")
+    suspend fun updateVolunteerSyncState(uid: String, syncState: String)
 }
 
 @Dao

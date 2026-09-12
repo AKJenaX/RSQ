@@ -39,6 +39,23 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
         Log.i(TAG, "LOCAL_REPORT_SAVED: ID=${report.id}, SyncStatus=$syncStatus")
     }
 
+    open suspend fun addReceivedMedia(reportId: String, mediaPath: String) {
+        val entity = reportDao.getReportById(reportId)
+        if (entity != null) {
+            if (!entity.localImagePaths.contains(mediaPath)) {
+                val updatedPaths = entity.localImagePaths + mediaPath
+                val updatedEntity = entity.copy(
+                    localImagePaths = updatedPaths,
+                    localImagePath = updatedPaths.firstOrNull() ?: entity.localImagePath
+                )
+                reportDao.insertReport(updatedEntity)
+                Log.i(TAG, "RECEIVED_MEDIA_ADDED: reportId=$reportId, path=$mediaPath")
+            }
+        } else {
+            Log.w(TAG, "Cannot add received media for unknown reportId=$reportId")
+        }
+    }
+
     open suspend fun getPendingReports(): List<ReportEntity> {
         return reportDao.getReportsBySyncStatus(SyncStatus.LOCAL_ONLY) +
                reportDao.getReportsBySyncStatus(SyncStatus.FAILED) +
@@ -76,6 +93,8 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
     }
 
     private fun ReportEntity.toDomain(): Report {
+        val effectiveImageUrls = if (imageUrls.isNotEmpty()) imageUrls else localImagePaths
+        val effectiveImageUrl = imageUrl ?: localImagePath
         return Report(
             id = id,
             userId = userId,
@@ -86,8 +105,8 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
             timestamp = timestamp,
             latitude = latitude,
             longitude = longitude,
-            imageUrl = imageUrl,
-            imageUrls = imageUrls,
+            imageUrl = effectiveImageUrl,
+            imageUrls = effectiveImageUrls,
             isOffline = isOffline,
             aiScore = aiScore,
             detectedHazards = detectedHazards,

@@ -131,6 +131,16 @@ class AuthRepository(
         }
     }
 
+    suspend fun updateAvailability(firebaseUid: String, isAvailable: Boolean): Result<Unit> {
+        return try {
+            firestore.collection("users").document(firebaseUid).update("isAvailable", isAvailable).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Availability update failed for users/$firebaseUid: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
     fun logout() {
         firebaseAuth.signOut()
     }

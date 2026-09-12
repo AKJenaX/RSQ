@@ -8,13 +8,16 @@ data class Assignment(
     val id: String,
     val reportId: String,
     val volunteerId: String?,
-    val volunteerName: String, // Keeping for UI simplicity in Phase 1
-    val victimName: String,    // Keeping for UI simplicity in Phase 1
-    val disasterType: String,  // Keeping for UI simplicity in Phase 1
-    val location: String,      // Keeping for UI simplicity in Phase 1
+    val volunteerName: String, // Keeping for UI simplicity
+    val victimName: String,    // Keeping for UI simplicity
+    val disasterType: String,  // Keeping for UI simplicity
+    val location: String,      // Keeping for UI simplicity
     val status: AssignmentStatus,
     val priority: Priority,
-    val assignedTime: String,  // Keeping for UI simplicity in Phase 1
+    val assignedTime: String,  // Keeping for UI simplicity
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val volunteerFirebaseUid: String? = null,
+    val authorityId: String? = null,
+    val syncState: String = "SYNCED"
 )

@@ -21,5 +21,7 @@ data class MeshMessage(
     // Unified report fields for reliable offline transmission
     val title: String = "",
     val description: String = "",
-    val accuracy: Float? = null
+    val accuracy: Float? = null,
+    // Attached evidence media metadata (up to 5 items)
+    val mediaItems: List<MeshMediaMetadata> = emptyList()
 )

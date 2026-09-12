@@ -22,7 +22,10 @@ data class AssignmentEntity(
     val priority: String,
     val assignedTime: String,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val volunteerFirebaseUid: String? = null,
+    val authorityId: String? = null,
+    val syncState: String = "SYNCED"
 ) {
     fun toDomain(): Assignment = Assignment(
         id = id,
@@ -36,7 +39,10 @@ data class AssignmentEntity(
         priority = Priority.valueOf(priority),
         assignedTime = assignedTime,
         createdAt = createdAt,
-        updatedAt = updatedAt
+        updatedAt = updatedAt,
+        volunteerFirebaseUid = volunteerFirebaseUid,
+        authorityId = authorityId,
+        syncState = syncState
     )
 
     companion object {
@@ -52,7 +58,10 @@ data class AssignmentEntity(
             priority = domain.priority.name,
             assignedTime = domain.assignedTime,
             createdAt = domain.createdAt,
-            updatedAt = domain.updatedAt
+            updatedAt = domain.updatedAt,
+            volunteerFirebaseUid = domain.volunteerFirebaseUid,
+            authorityId = domain.authorityId,
+            syncState = domain.syncState
         )
     }
 }
@@ -65,7 +74,9 @@ data class VolunteerEntity(
     val totalAssignments: Int,
     val pendingAssignments: Int,
     val activeAssignments: Int,
-    val completedAssignments: Int
+    val completedAssignments: Int,
+    val isAvailable: Boolean = false,
+    val syncState: String = "SYNCED"
 ) {
     fun toDomain(): Volunteer = Volunteer(
         id = id,
@@ -73,7 +84,10 @@ data class VolunteerEntity(
         totalAssignments = totalAssignments,
         pendingAssignments = pendingAssignments,
         activeAssignments = activeAssignments,
-        completedAssignments = completedAssignments
+        completedAssignments = completedAssignments,
+        firebaseUid = firebaseUid,
+        isAvailable = isAvailable,
+        syncState = syncState
     )
 
     companion object {
@@ -84,7 +98,9 @@ data class VolunteerEntity(
             totalAssignments = domain.totalAssignments,
             pendingAssignments = domain.pendingAssignments,
             activeAssignments = domain.activeAssignments,
-            completedAssignments = domain.completedAssignments
+            completedAssignments = domain.completedAssignments,
+            isAvailable = domain.isAvailable,
+            syncState = domain.syncState
         )
     }
 }

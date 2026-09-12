@@ -26,6 +26,7 @@ class VolunteerViewModel(
     )
 
     init {
+        assignmentRepository.startRealtimeSync(firebaseUid)
         loadData()
     }
 
@@ -58,5 +59,16 @@ class VolunteerViewModel(
         viewModelScope.launch {
             assignmentRepository.updateAssignmentStatus(id, AssignmentStatus.ASSIGNED)
         }
+    }
+
+    fun toggleAvailability(isAvailable: Boolean) {
+        viewModelScope.launch {
+            volunteerRepository.updateAvailability(firebaseUid, isAvailable)
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        assignmentRepository.stopRealtimeSync()
     }
 }

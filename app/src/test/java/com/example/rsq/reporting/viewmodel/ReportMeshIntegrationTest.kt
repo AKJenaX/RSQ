@@ -30,6 +30,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
+import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ReportMeshIntegrationTest {
@@ -226,7 +227,7 @@ class ReportMeshIntegrationTest {
         override fun start() {}
         override fun stop() {}
         override fun discoverPeers() {}
-        override suspend fun sendMessage(message: MeshMessage): Result<Unit> {
+        override suspend fun sendMessage(message: MeshMessage, mediaFiles: List<File>): Result<Unit> {
             if (shouldFail) return Result.failure(Exception("Mesh unavailable"))
             sentMessages.add(message)
             return Result.success(Unit)

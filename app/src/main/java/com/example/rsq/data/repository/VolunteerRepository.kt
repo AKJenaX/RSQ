@@ -8,5 +8,9 @@ interface VolunteerRepository {
     fun getVolunteerData(firebaseUid: String): Flow<Volunteer?>
     fun getAssignments(volunteerId: String): Flow<List<Assignment>>
     fun getAllVolunteers(): Flow<List<Volunteer>>
+    fun getAvailableVolunteers(): Flow<List<Volunteer>>
     suspend fun createVolunteerProfile(firebaseUid: String, name: String)
+    suspend fun updateAvailability(firebaseUid: String, isAvailable: Boolean)
+    fun startRealtimeVolunteerSync()
+    fun stopRealtimeVolunteerSync()
 }

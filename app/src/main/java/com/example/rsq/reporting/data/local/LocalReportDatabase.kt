@@ -16,7 +16,7 @@ import com.example.rsq.data.local.*
         VolunteerEntity::class,
         NotificationEntity::class
     ],
-    version = 5,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(AiConverters::class)
@@ -60,6 +60,21 @@ abstract class LocalReportDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE volunteers ADD COLUMN isAvailable INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE assignments ADD COLUMN volunteerFirebaseUid TEXT")
+                db.execSQL("ALTER TABLE assignments ADD COLUMN authorityId TEXT")
+            }
+        }
+
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE assignments ADD COLUMN syncState TEXT NOT NULL DEFAULT 'SYNCED'")
+                db.execSQL("ALTER TABLE volunteers ADD COLUMN syncState TEXT NOT NULL DEFAULT 'SYNCED'")
+            }
+        }
+
         fun getDatabase(context: Context): LocalReportDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -67,7 +82,7 @@ abstract class LocalReportDatabase : RoomDatabase() {
                     LocalReportDatabase::class.java,
                     "report_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                 .build()
                 INSTANCE = instance
                 instance

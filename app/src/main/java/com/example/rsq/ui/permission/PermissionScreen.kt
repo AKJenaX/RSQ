@@ -1,6 +1,7 @@
 package com.example.rsq.ui.permission
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -13,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
@@ -29,17 +31,32 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.rsq.util.BluetoothStateHelper
 
 @Composable
 fun PermissionScreen(
     onPermissionsGranted: () -> Unit
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val requiredPermissions = remember { getRequiredPermissions() }
 
     var permissionsState by remember {
         mutableStateOf(checkPermissions(context, requiredPermissions))
+    }
+
+    var showBluetoothOffDialog by remember { mutableStateOf(false) }
+
+    val bluetoothLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { _ ->
+        if (BluetoothStateHelper.isBluetoothEnabled(context)) {
+            showBluetoothOffDialog = false
+            onPermissionsGranted()
+        } else {
+            showBluetoothOffDialog = true
+        }
     }
 
     // Authoritative check and transition
@@ -47,7 +64,12 @@ fun PermissionScreen(
         val newState = checkPermissions(context, requiredPermissions)
         permissionsState = newState
         if (newState.allGranted) {
-            onPermissionsGranted()
+            if (BluetoothStateHelper.isBluetoothEnabled(context)) {
+                showBluetoothOffDialog = false
+                onPermissionsGranted()
+            } else {
+                bluetoothLauncher.launch(BluetoothStateHelper.createEnableBluetoothIntent())
+            }
         }
     }
 
@@ -74,6 +96,53 @@ fun PermissionScreen(
     // Initial check on launch
     LaunchedEffect(Unit) {
         updateAndCheck()
+    }
+
+    if (showBluetoothOffDialog) {
+        AlertDialog(
+            onDismissRequest = { /* Non-dismissible without choice */ },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.BluetoothDisabled,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Bluetooth Required",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = "Bluetooth is currently turned off. RSQ requires Bluetooth to communicate with nearby devices for Offline Mesh networking.",
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        bluetoothLauncher.launch(BluetoothStateHelper.createEnableBluetoothIntent())
+                    }
+                ) {
+                    Text("Turn On Bluetooth", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showBluetoothOffDialog = false
+                        onPermissionsGranted()
+                    }
+                ) {
+                    Text("Continue Anyway")
+                }
+            }
+        )
     }
 
     Surface(
@@ -215,7 +284,7 @@ private data class PermissionsState(
     val allGranted: Boolean
 )
 
-private fun checkPermissions(context: android.content.Context, list: List<String>): PermissionsState {
+private fun checkPermissions(context: Context, list: List<String>): PermissionsState {
     val location = list.filter { it.contains("LOCATION") }.all {
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }

@@ -1,0 +1,52 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper functions for authentication and ownership checks
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Verifies report ownership via Firestore report document lookup
+    function isOwnerOrNewReport(reportId) {
+      return isAuthenticated() && (
+        !firestore.exists(/databases/(default)/documents/reports/$(reportId)) ||
+        firestore.get(/databases/(default)/documents/reports/$(reportId)).data.userId == request.auth.uid
+      );
+    }
+
+    function isAuthority() {
+      return isAuthenticated() &&
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'AUTHORITY' &&
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.isAuthorized == true;
+    }
+
+    // =========================
+    // REPORT EVIDENCE STORAGE
+    // =========================
+    match /reports/{reportId}/{fileName} {
+
+      // Read: Any authenticated user (victim owner, assigned volunteer, or authority inspecting evidence)
+      allow read: if isAuthenticated();
+
+      // Create (Upload): Authenticated report owner uploading evidence photos under 10MB
+      allow create: if isAuthenticated() &&
+        isOwnerOrNewReport(reportId) &&
+        request.resource.contentType.matches('image/.*') &&
+        request.resource.size < 10 * 1024 * 1024;
+
+      // Update / Overwrite: Strictly prohibited (evidence photos use unique non-deterministic UUIDs)
+      allow update: if false;
+
+      // Delete: Strictly prohibited
+      allow delete: if false;
+    }
+
+    // Fallback rule: Deny all unhandled paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

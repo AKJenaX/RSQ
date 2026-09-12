@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,6 +24,7 @@ import com.example.rsq.data.model.Priority
 import com.example.rsq.ui.viewmodel.AssignmentViewModel
 import com.example.rsq.ui.viewmodel.UiState
 import com.example.rsq.ui.common.*
+import com.example.rsq.util.IncidentNavigationHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -156,6 +158,32 @@ fun AssignmentDetailCard(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (assignment.syncState == "PENDING") {
+                        Surface(
+                            color = Color(0xFFFFF3E0),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Sync,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = Color(0xFFEF6C00)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Pending Sync",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFEF6C00)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     RSQStatusBadge(assignment.status.name, color = when(assignment.status) {
                         AssignmentStatus.AVAILABLE -> Color.Gray
                         AssignmentStatus.ASSIGNED -> Color(0xFF1976D2)
@@ -194,7 +222,28 @@ fun AssignmentDetailCard(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Info rows
+            val context = LocalContext.current
+            val parsedCoords = remember(assignment.location) {
+                IncidentNavigationHelper.parseCoordinatesFromLocationString(assignment.location)
+            }
+
             InfoRow(icon = Icons.Default.LocationOn, text = assignment.location)
+
+            if (parsedCoords != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = {
+                        IncidentNavigationHelper.launchNavigation(context, parsedCoords.first, parsedCoords.second)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Navigate to Incident", fontWeight = FontWeight.Bold)
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
             InfoRow(icon = Icons.Default.AccessTime, text = "Logged at ${assignment.assignedTime}")
 

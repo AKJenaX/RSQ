@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,6 +23,7 @@ import coil.compose.AsyncImage
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.ui.components.SeverityBadge
 import com.example.rsq.reporting.viewmodel.ReportViewModel
+import com.example.rsq.util.IncidentNavigationHelper
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -38,6 +40,7 @@ fun ReportDetailScreen(
     val report = remember(reports, meshReports, reportId) {
         reports.find { it.id == reportId } ?: meshReports.find { it.id == reportId }
     }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -152,19 +155,33 @@ fun ReportDetailScreen(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f))
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(text = "Location", style = MaterialTheme.typography.labelSmall)
-                            Text(
-                                text = if (report.latitude != null) "Lat: ${String.format("%.4f", report.latitude)}, Lng: ${String.format("%.4f", report.longitude)}" else "Location Unknown",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(text = "Location", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    text = if (report.latitude != null) "Lat: ${String.format("%.4f", report.latitude)}, Lng: ${String.format("%.4f", report.longitude)}" else "Location Unknown",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        if (IncidentNavigationHelper.isValidCoordinate(report.latitude, report.longitude)) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    IncidentNavigationHelper.launchNavigation(context, report.latitude, report.longitude)
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Navigate to Incident", fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
