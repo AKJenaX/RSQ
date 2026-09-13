@@ -1,0 +1,42 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // -- HELPER FUNCTIONS ---------------------------------------------------------
+    
+    function isAuthority() {
+      return request.auth != null &&
+             firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)) &&
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'AUTHORITY' &&
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.authorized == true;
+    }
+
+    function isReportOwner(reportId) {
+      return request.auth != null &&
+             firestore.exists(/databases/(default)/documents/reports/$(reportId)) &&
+             firestore.get(/databases/(default)/documents/reports/$(reportId)).data.userId == request.auth.uid;
+    }
+
+    function isValidImage() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // -- SECURITY POLICIES --------------------------------------------------------
+
+    match /reports/{reportId}/{fileName} {
+      // Create: Authenticated users can upload
+      allow create: if request.auth != null;
+      
+      // Read: Authority can read all, normal users can read their own report's media
+      allow read: if isAuthority() || isReportOwner(reportId);
+      
+      // Update/Delete: Only Authority
+      allow update, delete: if isAuthority();
+    }
+    
+    // Deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

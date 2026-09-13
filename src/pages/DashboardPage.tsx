@@ -1,273 +1,300 @@
-import React from 'react';
-import { useReports } from '../hooks/useReports';
-import { useVolunteers } from '../hooks/useVolunteers';
-import { useResources } from '../hooks/useResources';
-import { useOperationalIntelligence } from '../hooks/useOperationalIntelligence';
-import { StatCard } from '../components/StatCard';
-import { SeverityBadge, StatusBadge } from '../components/Badge';
-import { LoadingSpinner } from '../components/LoadingSpinner';
-import { ErrorState } from '../components/ErrorState';
-import { EmptyState } from '../components/EmptyState';
-import { AlertTriangle, Activity, ShieldAlert, CheckCircle } from 'lucide-react';
-import { formatRelativeTime, formatReportId } from '../utils/formatters';
-import { Link } from 'react-router-dom';
+import { Link } from "react-router-dom";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { AlertTriangle, Banknote, Package, Users } from "lucide-react";
+import { PageHeader, Panel, StatCard, StatusBadge, Bar as MiniBar } from "../components/ui-kit";
+import { currency } from "../lib/mock-data";
+import { useReports } from "../hooks/useReports";
+import { useVolunteers } from "../hooks/useVolunteers";
+import { useResources } from "../hooks/useResources";
+import { useFinance } from "../hooks/useFinance";
+import { useActivities } from "../hooks/useActivities";
+import { useOperationalIntelligence } from "../hooks/useOperationalIntelligence";
+import { isActiveIncident, isResolvedIncident } from "../utils/statusUtils";
 
-export function DashboardPage(): React.ReactElement {
-  const { reports, loadState: reportsLoadState, error: reportsError } = useReports();
-  const { volunteers, loadState: volLoadState } = useVolunteers();
-  const { resources, loadState: resLoadState } = useResources();
+const PIE_COLORS = [
+  "var(--color-chart-1)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+  "var(--color-chart-4)",
+  "var(--color-chart-5)",
+];
 
-  const loading = reportsLoadState === 'loading' || volLoadState === 'loading' || resLoadState === 'loading';
-  const error = reportsError; 
+const tooltipStyle = {
+  backgroundColor: "var(--color-card)",
+  border: "1px solid var(--color-border)",
+  borderRadius: "8px",
+  fontSize: "12px",
+  color: "var(--color-foreground)",
+};
 
-  const intelligence = useOperationalIntelligence(reports, volunteers, resources);
-  
-  if (reportsLoadState === 'not-configured') {
-    return <ErrorState type="not-configured" />;
-  }
+export function DashboardPage() {
+  const { reports, loadState: reportsLoadState } = useReports();
+  const { volunteers, loadState: volunteersLoadState } = useVolunteers();
+  const { resources, loadState: resourcesLoadState } = useResources();
+  const { funds, loadState: financeLoadState } = useFinance();
+  const { activities, loadState: activitiesLoadState } = useActivities();
+  const intel = useOperationalIntelligence(reports, volunteers, resources);
 
-  // Calculate Health Class
-  let healthStripClass = 'alert-nominal-strip';
-  let HealthIcon = CheckCircle;
-  if (intelligence.healthStatus === 'CRITICAL') {
-    healthStripClass = 'alert-critical';
-    HealthIcon = ShieldAlert;
-  } else if (intelligence.healthStatus === 'WATCH') {
-    healthStripClass = 'alert-warning';
-    HealthIcon = AlertTriangle;
-  }
+  // Financial Stats
+  const fundsAvailable = funds.reduce((acc, f) => acc + ((f.allocatedAmount || 0) - (f.utilizedAmount || 0)), 0);
+
+  // Incident Mix calculation
+  const incidentMix = reports.reduce((acc: any, r) => {
+    const type = r.title || r.incidentType || "Other";
+    if (!acc[type]) acc[type] = 0;
+    acc[type]++;
+    return acc;
+  }, {});
+  const incidentTypes = Object.entries(incidentMix).map(([name, count]) => ({
+    name,
+    value: Math.round(((count as number) / Math.max(reports.length, 1)) * 100)
+  })).sort((a, b) => b.value - a.value).slice(0, 5);
+
+  // Incident Trend calculation (last 7 days mock structure based on real data)
+  const incidentTrend = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    const dayStr = d.toLocaleDateString("en-US", { weekday: "short" });
+    const dayStart = new Date(d.setHours(0, 0, 0, 0)).getTime();
+    const dayEnd = new Date(d.setHours(23, 59, 59, 999)).getTime();
+    const dayIncidents = reports.filter(r => {
+      return typeof r.timestamp === 'number' && r.timestamp >= dayStart && r.timestamp <= dayEnd;
+    }).length;
+    const dayResolved = reports.filter(r => {
+      const ts = r.resolvedAt;
+      if (!ts) return false;
+      return isResolvedIncident(r.status) && ts >= dayStart && ts <= dayEnd;
+    }).length;
+    return { day: dayStr, incidents: dayIncidents, resolved: dayResolved };
+  });
+
+  const primaryDataError = [reportsLoadState, volunteersLoadState, resourcesLoadState, financeLoadState].some(s => s === 'error' || s === 'permission-denied');
 
   return (
-    <div className="dashboard-root">
-      {/* ── COMMAND HEADER ── */}
-      <div className="command-header">
-        <div className="command-header-main">
-          <div className="command-title-group">
-            <h1 className="command-title">Operations Command Center</h1>
-            <p className="command-subtitle">Real-time emergency response overview</p>
-          </div>
-          <div className="command-live-badge">
-            <div className="live-dot-pulse" aria-hidden="true" />
-            LIVE
-          </div>
-        </div>
-        
-        <div className="command-status-strip">
-          <div className="strip-item">
-            <span className="strip-label">Active Incidents</span>
-            <span className="strip-value">{intelligence.activeCount}</span>
-          </div>
-          <div className="strip-item">
-            <span className="strip-label">Critical</span>
-            <span className="strip-value text-error">{intelligence.criticalCount}</span>
-          </div>
-          <div className="strip-item">
-            <span className="strip-label">Unassigned</span>
-            <span className="strip-value text-warning">{intelligence.unassignedCount}</span>
-          </div>
-          <div className="strip-item">
-            <span className="strip-label">Vols Available</span>
-            <span className={`strip-value ${intelligence.volunteersAvailable === 0 ? 'text-error' : 'text-success'}`}>{intelligence.volunteersAvailable}</span>
-          </div>
-          <div className="strip-item">
-            <span className="strip-label">Res Available</span>
-            <span className={`strip-value ${intelligence.resourcesAvailable === 0 ? 'text-error' : 'text-success'}`}>{intelligence.resourcesAvailable}</span>
-          </div>
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title="Command Dashboard"
+        subtitle="Operational picture - All zones"
+      />
 
-      {(reportsLoadState === 'error' || reportsLoadState === 'permission-denied') && (
-        <ErrorState type={reportsLoadState} message={error ?? undefined} />
+      {primaryDataError && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          Unable to load primary dashboard data. Please check your network and access permissions.
+        </p>
       )}
 
-      {loading && <LoadingSpinner message="Syncing operational data…" />}
-
-      {/* ── OPERATIONAL HEALTH & ALERTS ── */}
-      <div className="dashboard-alerts">
-        {!loading && (
-          <div className={`alert-banner ${healthStripClass}`} style={{ alignItems: 'center' }}>
-            <HealthIcon size={16} className="mr-2" />
-            <div className="alert-content">
-              <span className="font-semibold uppercase mr-2">{intelligence.healthStatus}</span>
-              <span className="alert-message text-tertiary hidden-mobile">— {intelligence.healthReason}</span>
-              <span className="alert-link ml-auto">{intelligence.summaryStatement}</span>
-            </div>
-          </div>
-        )}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          label="Active Incidents"
+          value={reportsLoadState === 'error' || reportsLoadState === 'permission-denied' ? "Unavailable" : reports.filter(r => isActiveIncident(r.status)).length.toString()}
+          hint={reportsLoadState === 'error' || reportsLoadState === 'permission-denied' ? "Permission Denied" : "total active"}
+          icon={<AlertTriangle className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Volunteers Deployed"
+          value={volunteersLoadState === 'error' || volunteersLoadState === 'permission-denied' ? "Unavailable" : volunteers.filter(v => v.status === "ASSIGNED").length.toString()}
+          hint={volunteersLoadState === 'error' || volunteersLoadState === 'permission-denied' ? "Permission Denied" : `of ${volunteers.length} registered`}
+          icon={<Users className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Resource Readiness"
+          value={resourcesLoadState === 'error' || resourcesLoadState === 'permission-denied' ? "Unavailable" : `${Math.round((resources.filter(r => r.status === "AVAILABLE").length / Math.max(resources.length, 1)) * 100)}%`}
+          hint={resourcesLoadState === 'error' || resourcesLoadState === 'permission-denied' ? "Permission Denied" : "fleet availability"}
+          icon={<Package className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Funds Available"
+          value={financeLoadState === 'error' || financeLoadState === 'permission-denied' ? "Unavailable" : currency(fundsAvailable)}
+          hint={financeLoadState === 'error' || financeLoadState === 'permission-denied' ? "Permission Denied" : `across ${funds.length} funds`}
+          icon={<Banknote className="h-4 w-4" />}
+        />
       </div>
 
-      {/* ── WHAT NEEDS ATTENTION NOW? ── */}
-      {!loading && intelligence.attentionItems.length > 0 && (
-        <div className="dashboard-section priority-section mb-6 border-error">
-          <div className="section-header bg-error-subtle">
-            <h2 className="section-title text-error flex items-center gap-2">
-              <ShieldAlert size={16} /> Requires Attention
-            </h2>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel
+          title="Incident Volume"
+          description="Reported vs resolved, last 7 days"
+          className="lg:col-span-2"
+        >
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={incidentTrend}>
+                <defs>
+                  <linearGradient id="gInc" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-chart-1)" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="var(--color-chart-1)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gRes" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--color-chart-3)" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="var(--color-chart-3)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="day" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={28} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Area type="monotone" dataKey="incidents" stroke="var(--color-chart-1)" fill="url(#gInc)" strokeWidth={2} />
+                <Area type="monotone" dataKey="resolved" stroke="var(--color-chart-3)" fill="url(#gRes)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-          <div className="incident-table-container">
-            <table className="incident-table">
-              <tbody>
-                {intelligence.attentionItems.slice(0, 3).map((report) => {
-                  return (
-                    <tr key={report.reportId} className="incident-row severity-critical" onClick={() => window.location.href = `/reports/${report.reportId}`}>
-                      <td><SeverityBadge value={report.severity} /></td>
-                      <td>
-                        <div className="incident-title">{report.title || 'Emergency Report'}</div>
-                        <div className="text-error text-xs font-semibold">{report.priorityReason}</div>
-                      </td>
-                      <td><StatusBadge value={report.status} /></td>
-                      <td className="incident-time text-error font-medium">{formatRelativeTime(report.timestamp)}</td>
-                      <td>
-                        <button className="btn-secondary" style={{ padding: '4px 12px', fontSize: '0.7rem' }}>VIEW INCIDENT</button>
-                      </td>
-                    </tr>
-                  );
-                })}
+        </Panel>
+
+        <Panel title="Incident Mix" description="Share by category this month">
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={incidentTypes}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={2}
+                  stroke="var(--color-card)"
+                >
+                  {incidentTypes.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={tooltipStyle} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <ul className="mt-2 grid grid-cols-2 gap-1.5 text-xs">
+            {incidentTypes.map((t, i) => (
+              <li key={t.name} className="flex items-center gap-2 text-muted-foreground">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                />
+                <span className="truncate">{t.name}</span>
+                <span className="ml-auto tabular-nums text-foreground">{t.value}%</span>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel
+          title="Priority Incidents"
+          description="Highest severity open calls"
+          className="lg:col-span-2"
+          actions={
+            <Link to="/reports" className="text-xs font-medium text-primary hover:underline">
+              View all
+            </Link>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="pb-2 font-medium">ID</th>
+                  <th className="pb-2 font-medium">Type</th>
+                  <th className="pb-2 font-medium">Location</th>
+                  <th className="pb-2 font-medium">Severity</th>
+                  <th className="pb-2 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {intel.incidentQueue.filter(r => r.status !== 'RESOLVED').slice(0, 5).map((i) => (
+                  <tr key={i.reportId}>
+                    <td className="py-2.5 font-mono text-xs text-muted-foreground">{i.reportId.slice(0, 8)}</td>
+                    <td className="py-2.5 font-medium">{i.title || i.incidentType || 'Unknown'}</td>
+                    <td className="py-2.5 text-muted-foreground">{i.latitude ? `${i.latitude}, ${i.longitude}` : "Unknown"}</td>
+                    <td className="py-2.5"><StatusBadge label={(i.severity as string) || "UNKNOWN"} /></td>
+                    <td className="py-2.5"><StatusBadge label={(i.status as string) || "OPEN"} /></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        </Panel>
 
-      {/* ── ESSENTIAL METRICS ── */}
-      <div className="dashboard-metrics">
-        <StatCard label="Critical" value={intelligence.criticalCount} indicatorClass="critical" description="Requires immediate attention" />
-        <StatCard label="Unassigned" value={intelligence.unassignedCount} indicatorClass="open" description="Awaiting response" />
-        <StatCard label="Total Active" value={intelligence.activeCount} indicatorClass="total" description="Current workload" />
-        
-        {/* Render 0-availability as explicit warning stat cards */}
-        {intelligence.volunteersAvailable === 0 ? (
-          <div className="stat-card border-error bg-error-subtle">
-             <div className="stat-card-label text-error">Vols Available</div>
-             <div className="stat-card-value-row">
-               <span className="stat-card-value text-error">0</span>
-               <ShieldAlert size={16} className="text-error" />
-             </div>
-             <div className="stat-card-desc text-error">No personnel available</div>
-          </div>
-        ) : (
-          <StatCard label="Vols Available" value={intelligence.volunteersAvailable} indicatorClass="resolved" description={`${intelligence.volunteersTotal} Total`} />
-        )}
-
-        {intelligence.resourcesAvailable === 0 ? (
-           <div className="stat-card border-error bg-error-subtle">
-             <div className="stat-card-label text-error">Res Available</div>
-             <div className="stat-card-value-row">
-               <span className="stat-card-value text-error">0</span>
-               <ShieldAlert size={16} className="text-error" />
-             </div>
-             <div className="stat-card-desc text-error">No resources available</div>
-          </div>
-        ) : (
-          <StatCard label="Res Available" value={intelligence.resourcesAvailable} indicatorClass="resolved" description={`${intelligence.resourcesTotal} Total`} />
-        )}
-      </div>
-
-      {/* ── MAIN OPERATIONS AREA (TRIMMED FOR OVERVIEW) ── */}
-      <div className="dashboard-main-area" style={{ gridTemplateColumns: '2fr 1fr' }}>
-        
-        <div className="dashboard-primary">
-          {/* RECENT INCIDENTS (COMPACT) */}
-          <section className="dashboard-section incident-section">
-            <div className="section-header">
-              <h2 className="section-title">Recent Incidents</h2>
-              <Link to="/reports" className="view-all-link">View all incidents &rarr;</Link>
-            </div>
-            
-            {intelligence.incidentQueue.length === 0 ? (
-              <EmptyState title="No active incidents" message="All operations nominal. There are no ongoing emergencies requiring attention." type="default" />
+        <Panel
+          title="Live Activity"
+          description="Latest coordination log"
+          actions={
+            <Link to="/activity" className="text-xs font-medium text-primary hover:underline">
+              Open
+            </Link>
+          }
+        >
+          <div className="space-y-4">
+            {activitiesLoadState === 'loading' ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">Loading activity feed...</p>
+            ) : activitiesLoadState === 'permission-denied' ? (
+              <p className="py-8 text-center text-sm text-destructive">Unable to load activity feed (Permission Denied).</p>
+            ) : activitiesLoadState === 'error' ? (
+              <p className="py-8 text-center text-sm text-destructive">Unable to load activity feed.</p>
+            ) : activitiesLoadState === 'empty' ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">No activity recorded.</p>
             ) : (
-              <div className="incident-table-container">
-                <table className="incident-table">
-                  <tbody>
-                    {intelligence.incidentQueue.slice(0, 5).map((report) => {
-                      const volName = report.assignedVolunteerId ? intelligence.volMap.get(report.assignedVolunteerId) : null;
-                      
-                      return (
-                        <tr key={report.reportId} className={`incident-row severity-${report.severity?.toLowerCase() || 'unknown'}`} onClick={() => window.location.href = `/reports/${report.reportId}`}>
-                          <td><SeverityBadge value={report.severity} /></td>
-                          <td>
-                            <div className="incident-title">{report.title || 'Emergency Report'}</div>
-                            <div className="incident-id">{formatReportId(report.reportId)}</div>
-                          </td>
-                          <td><StatusBadge value={report.status} /></td>
-                          <td>
-                            <div className="incident-units">
-                              {volName ? <span className="unit-badge vol text-[10px]">{volName}</span> : <span className="unit-badge empty text-error font-medium text-[10px]">UNASSIGNED</span>}
-                            </div>
-                          </td>
-                          <td className="incident-time">{formatRelativeTime(report.timestamp)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <ul className="space-y-3">
+                {activities.slice(0, 5).map((activity) => (
+                  <li key={activity.id} className="flex gap-3 text-sm">
+                    <span className="mt-1 font-mono text-xs text-muted-foreground">{activity.timestamp ? new Date(activity.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : '—'}</span>
+                    <div className="min-w-0">
+                      <p className="leading-snug">{activity.metadata?.description || activity.type.replace(/_/g, " ")}</p>
+                      <p className="truncate text-xs text-muted-foreground">{activity.performedBy}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
-          </section>
-        </div>
-        
-        <div className="dashboard-secondary">
-          {/* CAPACITY SUMMARY */}
-          <section className="dashboard-section ops-panel">
-            <div className="section-header">
-              <h2 className="section-title">Capacity Overview</h2>
-            </div>
-            <div className="p-4 flex flex-col gap-4">
-               <div className="flex justify-between items-center">
-                  <div className="flex flex-col">
-                     <span className="text-sm font-bold text-primary">Volunteers</span>
-                     <span className="text-[10px] text-tertiary uppercase">{intelligence.volunteersAvailable} / {intelligence.volunteersTotal} Available</span>
-                  </div>
-                  <Link to="/volunteers" className="btn-secondary" style={{ padding: '2px 8px', fontSize: '0.65rem' }}>View</Link>
-               </div>
-               <div className="flex justify-between items-center">
-                  <div className="flex flex-col">
-                     <span className="text-sm font-bold text-primary">Resources</span>
-                     <span className="text-[10px] text-tertiary uppercase">{intelligence.resourcesAvailable} / {intelligence.resourcesTotal} Available</span>
-                  </div>
-                  <Link to="/resources" className="btn-secondary" style={{ padding: '2px 8px', fontSize: '0.65rem' }}>View</Link>
-               </div>
-               
-               {intelligence.capacityWarnings.length > 0 && (
-                 <div className="text-[10px] text-error font-medium mt-2">
-                   <ShieldAlert size={10} className="inline mr-1"/> Capacity warnings active
-                 </div>
-               )}
-            </div>
-          </section>
-
-          {/* RECENT ACTIVITY SUMMARY */}
-          <section className="dashboard-section activity-panel">
-            <div className="section-header border-b-0 pb-0">
-              <h2 className="section-title">Latest Activity</h2>
-              <Link to="/activity" className="view-all-link">View all &rarr;</Link>
-            </div>
-            <div className="activity-timeline-dense p-4">
-              {intelligence.incidentQueue.slice(0, 3).map(report => (
-                  <div key={`act-${report.reportId}`} className="activity-dense-item">
-                    <div className="activity-dense-icon">
-                      {report.status === 'RESOLVED' ? <CheckCircle size={12} className="text-success" /> : 
-                       report.status === 'OPEN' ? <AlertTriangle size={12} className="text-error" /> : 
-                       <Activity size={12} className="text-info" />}
-                    </div>
-                    <div className="activity-dense-content">
-                      <span className="activity-dense-desc">
-                        {report.status === 'RESOLVED' ? `Resolved: ${report.title}` :
-                         report.status === 'OPEN' ? `New: ${report.title}` :
-                         `Update: ${report.title}`}
-                      </span>
-                      <span className="activity-dense-time">{formatRelativeTime(report.timestamp)}</span>
-                    </div>
-                  </div>
-              ))}
-              {intelligence.incidentQueue.length === 0 && (
-                  <div className="ops-empty-row">No recent activity.</div>
-              )}
-            </div>
-          </section>
-        </div>
+          </div>
+        </Panel>
       </div>
-    </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel title="Resource Availability" description="Critical assets on hand" className="lg:col-span-1">
+          <ul className="space-y-3">
+            {resources.slice(0, 5).map((r) => (
+              <li key={r.id}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="truncate">{r.name}</span>
+                  <span className="tabular-nums text-muted-foreground">
+                    {r.status === "AVAILABLE" ? 1 : 0}/1
+                  </span>
+                </div>
+                <div className="mt-1.5">
+                  <MiniBar value={r.status === "AVAILABLE" ? 1 : 0} max={1} tone={r.status === "AVAILABLE" ? "success" : "high"} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+
+        <Panel title="Fund Utilisation" description="Spent against allocation" className="lg:col-span-2">
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={funds.map((f) => ({ name: (f.purpose || f.fundId).split(" ")[0], allocated: f.allocatedAmount || 0, spent: f.utilizedAmount || 0 }))}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="name" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={50} tickFormatter={(v) => `${v / 1000}k`} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => currency(v as number)} />
+                <Bar dataKey="allocated" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="spent" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+      </div>
+    </>
   );
 }

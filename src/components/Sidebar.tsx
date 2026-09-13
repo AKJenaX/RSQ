@@ -1,13 +1,10 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
-import { Activity, LayoutDashboard, FileText, LogOut, Users, Box, History } from 'lucide-react';
+import { Activity, LayoutDashboard, FileText, LogOut, Users, Box, History, Map, HeartHandshake, Briefcase, Receipt, FileBarChart, ServerCrash } from 'lucide-react';
 import { auth } from '../firebase/config';
-import { useAuth } from '../hooks/useAuth';
 
 export function Sidebar(): React.ReactElement {
-  const { user } = useAuth();
-  
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -15,8 +12,6 @@ export function Sidebar(): React.ReactElement {
       console.error('[Sidebar] Sign out error:', err);
     }
   };
-
-  const displayName = user?.displayName ?? user?.email ?? 'Authority User';
 
   return (
     <aside className="sidebar" role="navigation" aria-label="Main navigation">
@@ -32,7 +27,7 @@ export function Sidebar(): React.ReactElement {
       {/* Navigation */}
       <nav className="sidebar-nav">
         {/* OVERVIEW */}
-        <div className="sidebar-nav-label">Overview</div>
+        <div className="sidebar-nav-label">COMMAND CENTER</div>
         <NavLink
           id="nav-dashboard"
           to="/dashboard"
@@ -45,7 +40,7 @@ export function Sidebar(): React.ReactElement {
         </NavLink>
 
         {/* OPERATIONS */}
-        <div className="sidebar-nav-label mt-4">Operations</div>
+        <div className="sidebar-nav-label mt-4">OPERATIONS</div>
         <NavLink
           id="nav-reports"
           to="/reports"
@@ -55,6 +50,16 @@ export function Sidebar(): React.ReactElement {
         >
           <FileText className="sidebar-nav-icon" size={16} />
           Incidents
+        </NavLink>
+        <NavLink
+          id="nav-map"
+          to="/live-map"
+          className={({ isActive }) =>
+            `sidebar-nav-item${isActive ? ' active' : ''}`
+          }
+        >
+          <Map className="sidebar-nav-icon" size={16} />
+          Live Map
         </NavLink>
         <NavLink
           id="nav-volunteers"
@@ -77,8 +82,8 @@ export function Sidebar(): React.ReactElement {
           Resources
         </NavLink>
 
-        {/* MONITORING */}
-        <div className="sidebar-nav-label mt-4">Monitoring</div>
+        {/* COORDINATION */}
+        <div className="sidebar-nav-label mt-4">COORDINATION</div>
         <NavLink
           id="nav-activity"
           to="/activity"
@@ -89,16 +94,76 @@ export function Sidebar(): React.ReactElement {
           <History className="sidebar-nav-icon" size={16} />
           Activity
         </NavLink>
+        <NavLink
+          id="nav-analytics"
+          to="/analytics"
+          className={({ isActive }) =>
+            `sidebar-nav-item${isActive ? ' active' : ''}`
+          }
+        >
+          <Activity className="sidebar-nav-icon" size={16} />
+          Analytics
+        </NavLink>
+
+        {/* FINANCIAL MANAGEMENT */}
+        <div className="sidebar-nav-label mt-4">FINANCIAL MANAGEMENT</div>
+        <NavLink
+          id="nav-donations"
+          to="/donations"
+          className={({ isActive }) =>
+            `sidebar-nav-item${isActive ? ' active' : ''}`
+          }
+        >
+          <HeartHandshake className="sidebar-nav-icon" size={16} />
+          Donations
+        </NavLink>
+        <NavLink
+          id="nav-funds"
+          to="/funds"
+          className={({ isActive }) =>
+            `sidebar-nav-item${isActive ? ' active' : ''}`
+          }
+        >
+          <Briefcase className="sidebar-nav-icon" size={16} />
+          Funds & Allocation
+        </NavLink>
+        <NavLink
+          id="nav-expenses"
+          to="/expenses"
+          className={({ isActive }) =>
+            `sidebar-nav-item${isActive ? ' active' : ''}`
+          }
+        >
+          <Receipt className="sidebar-nav-icon" size={16} />
+          Expenses
+        </NavLink>
+        <NavLink
+          id="nav-fin-reports"
+          to="/financial-reports"
+          className={({ isActive }) =>
+            `sidebar-nav-item${isActive ? ' active' : ''}`
+          }
+        >
+          <FileBarChart className="sidebar-nav-icon" size={16} />
+          Financial Reports
+        </NavLink>
+
+        {/* SYSTEM */}
+        <div className="sidebar-nav-label mt-4">SYSTEM</div>
+        <NavLink
+          id="nav-system"
+          to="/system"
+          className={({ isActive }) =>
+            `sidebar-nav-item${isActive ? ' active' : ''}`
+          }
+        >
+          <ServerCrash className="sidebar-nav-icon" size={16} />
+          System Health
+        </NavLink>
       </nav>
 
       {/* Footer */}
       <div className="sidebar-footer">
-        <div className="user-profile">
-          <div className="user-info-stack">
-            <span className="user-email">{displayName}</span>
-            <span className="user-role">Authority</span>
-          </div>
-        </div>
         <button
           id="btn-sidebar-signout"
           className="btn-signout"

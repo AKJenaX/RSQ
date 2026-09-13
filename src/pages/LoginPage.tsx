@@ -1,172 +1,147 @@
-import React, { useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import {
-  signInWithEmailAndPassword,
-} from 'firebase/auth';
-import type { AuthError } from 'firebase/auth';
-import { auth } from '../firebase/config';
-import { useAuth } from '../hooks/useAuth';
-import { isFirebaseConfigured } from '../firebase/config';
-import { LoadingSpinner } from '../components/LoadingSpinner';
-import { Shield } from 'lucide-react';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Loader2, Lock, ShieldAlert } from "lucide-react";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebase/config";
+import { useAuth } from "../hooks/useAuth";
+import commandCenter from "../assets/hero.png";
 
-function getAuthErrorMessage(error: AuthError): string {
-  switch (error.code) {
-    case 'auth/invalid-email':
-      return 'Please enter a valid email address.';
-    case 'auth/user-not-found':
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'Invalid email or password.';
-    case 'auth/too-many-requests':
-      return 'Too many failed attempts. Please wait before trying again.';
-    case 'auth/network-request-failed':
-      return 'Network error. Please check your connection.';
-    default:
-      return 'Sign in failed. Please try again.';
-  }
-}
+export function LoginPage() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-export function LoginPage(): React.ReactElement {
-  const { user, loading } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { user, loading: authLoading } = useAuth();
+  useEffect(() => {
+    if (user && !authLoading) navigate("/dashboard");
+  }, [user, authLoading, navigate]);
 
-  // Redirect if already authenticated
-  if (loading) {
-    return <LoadingSpinner message="Verifying credentials…" />;
-  }
-
-  if (user) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  if (!isFirebaseConfigured()) {
-    return (
-      <div className="auth-page">
-        <div className="auth-card">
-          <div className="state-container">
-            <Shield className="state-icon text-warning" size={48} aria-hidden="true" />
-            <h1 className="state-title">Firebase Not Configured</h1>
-            <p className="state-message">
-              Copy <code>.env.example</code> to <code>.env.local</code> and fill
-              in your Firebase credentials.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setSubmitting(true);
-
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      // onAuthStateChanged in useAuth will handle the redirect via Navigate
-    } catch (err) {
-      const authError = err as AuthError;
-      console.error('[LoginPage] Auth error:', authError.code);
-      setError(getAuthErrorMessage(authError));
-    } finally {
-      setSubmitting(false);
+    if (!email.includes("@") || password.length < 6) {
+      setError("Enter a valid authority email and a password of at least 6 characters.");
+      return;
     }
+    setError("");
+    setLoading(true);
+    signInWithEmailAndPassword(auth, email, password)
+      .then(() => {
+        navigate("/dashboard");
+      })
+      .catch((err) => {
+        setError(err.message || "Authentication failed. Check credentials.");
+        setLoading(false);
+      });
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card" role="main">
-        {/* Logo */}
-        <div className="auth-logo">
-          <Shield className="text-primary" size={24} aria-hidden="true" />
-          <div className="flex flex-col">
-            <span className="font-semibold text-primary">RSQ</span>
-            <span className="text-xs text-tertiary uppercase tracking-wider">Authority Portal</span>
+    <div className="grid min-h-screen lg:grid-cols-2">
+      <div className="relative hidden lg:block">
+        <img
+          src={commandCenter}
+          alt="Emergency operations command center with wall of monitors"
+          width={1280}
+          height={1600}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-background/30" />
+        <div className="absolute inset-x-0 bottom-0 p-10">
+          <p className="max-w-md font-display text-3xl font-semibold uppercase leading-tight">
+            Coordinated response, accountable relief.
+          </p>
+          <p className="mt-3 max-w-md text-sm text-muted-foreground">
+            RSQ Authority unifies incident dispatch, volunteer deployment, resource logistics and
+            donation stewardship in one operational console.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-6 text-xs uppercase tracking-widest text-muted-foreground">
+            <span>24/7 Operations</span>
+            <span>ISO 22320 Aligned</span>
+            <span>Audit Ready</span>
           </div>
         </div>
+      </div>
 
-        <h1 className="auth-heading">Sign In</h1>
-        <p className="auth-subheading">
-          Enter your credentials to access the emergency operations dashboard.
-        </p>
-
-        <form id="login-form" onSubmit={handleSubmit} noValidate>
-          <div className="form-group">
-            <label htmlFor="login-email" className="form-label">
-              Email Address
-            </label>
-            <input
-              id="login-email"
-              type="email"
-              className="form-input"
-              placeholder="authority@rsq.gov"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-              disabled={submitting}
-              aria-required="true"
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="login-password" className="form-label">
-              Password
-            </label>
-            <input
-              id="login-password"
-              type="password"
-              className="form-input"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              disabled={submitting}
-              aria-required="true"
-            />
-          </div>
-
-          {error && (
-            <div
-              className="form-error"
-              role="alert"
-              aria-live="polite"
-              id="login-error"
-            >
-              {error}
+      <div className="grid-backdrop flex items-center justify-center p-6">
+        <div className="w-full max-w-sm">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
+              <ShieldAlert className="h-6 w-6" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate font-display text-2xl font-semibold uppercase tracking-wider">
+                RSQ Authority
+              </h1>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                Resques Authority Management
+              </p>
             </div>
-          )}
-
-          <div className="mt-4">
-            <button
-              id="btn-login-submit"
-              type="submit"
-              className="btn-primary"
-              style={{ width: '100%' }}
-              disabled={submitting || !email || !password}
-              aria-busy={submitting}
-            >
-              {submitting ? 'Signing in...' : 'Sign In'}
-            </button>
           </div>
-        </form>
 
-        <p
-          style={{
-            marginTop: 'var(--space-6)',
-            fontSize: '0.75rem',
-            color: 'var(--text-tertiary)',
-            textAlign: 'center',
-            lineHeight: 1.6,
-          }}
-        >
-          Access restricted to authorised personnel only.
-        </p>
+          <h2 className="mt-8 text-xl font-semibold">Authority sign in</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Restricted to authorised emergency management personnel.
+          </p>
+
+          <form onSubmit={submit} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="email" className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                Authority email
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                placeholder="Enter email"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-card px-3 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                placeholder="Enter password"
+              />
+            </div>
+
+            {error ? (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                {error}
+              </p>
+            ) : null}
+
+            <div className="flex items-center justify-between text-xs">
+              <label className="flex items-center gap-2 text-muted-foreground">
+                <input type="checkbox" defaultChecked className="accent-[var(--color-primary)]" />
+                Keep me signed in
+              </label>
+              <a href="#" className="text-primary hover:underline">
+                Reset access
+              </a>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold uppercase tracking-wider text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
+              {loading ? "Authenticating" : "Enter command console"}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Sign in with valid Firebase credentials.
+          </p>
+        </div>
       </div>
     </div>
   );

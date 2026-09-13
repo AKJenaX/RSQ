@@ -40,7 +40,7 @@ export function formatTimestamp(value: number | undefined | null): string {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
-  });
+  }).replace(/am|pm/i, (m) => m.toUpperCase());
 }
 
 /**

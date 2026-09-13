@@ -1,200 +1,184 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useReports } from '../hooks/useReports';
-import { useVolunteers } from '../hooks/useVolunteers';
-import { useResources } from '../hooks/useResources';
-import { useOperationalIntelligence } from '../hooks/useOperationalIntelligence';
-import { SeverityBadge, StatusBadge } from '../components/Badge';
-import { LoadingSpinner } from '../components/LoadingSpinner';
-import { ErrorState } from '../components/ErrorState';
-import { EmptyState } from '../components/EmptyState';
-import { Search } from 'lucide-react';
-import {
-  formatTimestamp,
-  formatCoordinates,
-  formatReportId,
-  truncate,
-  getSeverityVariant,
-} from '../utils/formatters';
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Filter, Plus, Search } from "lucide-react";
+import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
+import { useReports } from "../hooks/useReports";
+import { useAuth } from "../hooks/useAuth";
+import { ReportModal } from "../components/Modals/ReportModal";
+import { isActiveIncident, isResolvedIncident } from "../utils/statusUtils";
 
-export function ReportsPage(): React.ReactElement {
-  const { reports, loadState: reportsLoadState, error } = useReports();
-  const { volunteers, loadState: volsLoadState } = useVolunteers();
-  const { resources, loadState: resLoadState } = useResources();
+const mapSeverity = (s: string) => {
+  if (s === "Moderate") return "MEDIUM";
+  return s.toUpperCase();
+};
+
+const mapStatus = (s: string) => {
+  if (s === "Active") return "OPEN";
+  if (s === "Assigned") return "ASSIGNED";
+  if (s === "In Progress") return "IN_PROGRESS";
+  if (s === "Escalated") return "ESCALATED";
+  return s.toUpperCase();
+};
+
+export function ReportsPage() {
   const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [severity, setSeverity] = useState("All");
+  const [status, setStatus] = useState("All");
+  const [showReportModal, setShowReportModal] = useState(false);
 
-  const loading = reportsLoadState === 'loading' || volsLoadState === 'loading' || resLoadState === 'loading';
-  const intelligence = useOperationalIntelligence(reports, volunteers, resources);
+  const { reports, loadState } = useReports();
+  const { user } = useAuth();
+  const rows = useMemo(
+    () =>
+      reports.filter(
+        (i) =>
+          (severity === "All" || i.severity === mapSeverity(severity) || (severity === "Unknown" && !i.severity)) &&
+          (status === "All" || i.status === mapStatus(status) || (status === "Active" && !i.status)) &&
+          ((i.title || i.incidentType || "Unknown") +
+            (typeof i.latitude === 'number' && typeof i.longitude === 'number' ? `${i.latitude},${i.longitude}` : "Unknown") +
+            i.reportId).toLowerCase().includes(query.toLowerCase()),
+      ),
+    [reports, query, severity, status],
+  );
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [severityFilter, setSeverityFilter] = useState('');
+  console.log("REPORTS_DUMP", JSON.stringify(reports));
 
-  const filtered = useMemo(() => {
-    return reports.filter((r) => {
-      const q = search.toLowerCase();
-      const matchesSearch =
-        !q ||
-        r.reportId.toLowerCase().includes(q) ||
-        (r.title ?? '').toLowerCase().includes(q) ||
-        (r.description ?? '').toLowerCase().includes(q) ||
-        formatCoordinates(r.latitude, r.longitude).toLowerCase().includes(q);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
 
-      const matchesStatus =
-        !statusFilter ||
-        (r.status ?? '').toUpperCase() === statusFilter.toUpperCase();
-
-      const matchesSeverity =
-        !severityFilter ||
-        (r.severity ?? '').toUpperCase() === severityFilter.toUpperCase();
-
-      return matchesSearch && matchesStatus && matchesSeverity;
-    });
-  }, [reports, search, statusFilter, severityFilter]);
+  const resolvedToday = reports.filter(r =>
+    isResolvedIncident(r.status) &&
+    r.resolvedAt &&
+    r.resolvedAt >= startOfToday.getTime() &&
+    r.resolvedAt <= endOfToday.getTime()
+  ).length.toString();
 
   return (
     <>
-      <div className="page-header">
-        <h1 className="page-title">Incidents</h1>
-        <p className="page-subtitle">
-          Real-time incident management workspace
-          {reportsLoadState === 'success' && ` · ${reports.length} total`}
+      <PageHeader
+        title="Incident Register"
+        subtitle="All reported emergencies - auto-refresh 30s"
+        actions={
+          <button onClick={() => setShowReportModal(true)} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
+            <Plus className="h-4 w-4" /> Log incident
+          </button>
+        }
+      />
+      
+      {loadState === 'permission-denied' && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          You do not have permission to view incident reports.
         </p>
+      )}
+      {loadState === 'error' && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          Live incidents could not be loaded. Please check your connection and try again.
+        </p>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Active Incidents" value={reports.filter(r => isActiveIncident(r.status)).length.toString()} hint="active response" />
+        <StatCard label="Critical" value={reports.filter(r => r.severity === "CRITICAL").length.toString()} hint="requires command approval" />
+        <StatCard
+          label="Avg. Response"
+          value={`${(() => {
+            const withResponse = reports.filter(r => r.assignedAt && r.timestamp);
+            if (withResponse.length === 0) return 'N/A';
+            const totalMins = withResponse.reduce((acc, r) => acc + ((r.assignedAt! - r.timestamp!) / 60000), 0);
+            return (totalMins / withResponse.length).toFixed(1) + ' min';
+          })()}`}
+          hint={reports.filter(r => r.assignedAt && r.timestamp).length === 0 ? "Response timestamps not available" : "avg time to dispatch"}
+        />
+        <StatCard label="Resolved Today" value={resolvedToday} hint="cleared" />
       </div>
 
-      {reportsLoadState === 'success' && reports.length > 0 && (
-        <div className="table-toolbar">
-          <div className="search-input-wrapper">
-            <Search className="search-icon" size={16} aria-hidden="true" />
+      <Panel
+        title="Incident Log"
+        description={`${rows.length} records match current filters`}
+        actions={
+          <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
+            <Filter className="h-3.5 w-3.5" /> Filters
+          </span>
+        }
+      >
+        <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              id="reports-search"
-              type="search"
-              className="search-input"
-              placeholder="Search by title, ID, location…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search incidents"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by ID, type or location"
+              className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm outline-none focus:border-ring"
             />
           </div>
-
           <select
-            id="filter-status"
-            className="filter-select"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            aria-label="Filter by status"
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
           >
-            <option value="">All Statuses</option>
-            <option value="OPEN">Open</option>
-            <option value="ASSIGNED">Assigned</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="RESOLVED">Resolved</option>
+            {["All", "Critical", "High", "Moderate", "Low"].map((s) => (
+              <option key={s}>{s}</option>
+            ))}
           </select>
-
           <select
-            id="filter-severity"
-            className="filter-select"
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            aria-label="Filter by severity"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring"
           >
-            <option value="">All Severities</option>
-            <option value="LOW">Low</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="HIGH">High</option>
-            <option value="CRITICAL">Critical</option>
+            {["All", "Active", "Assigned", "In Progress", "Escalated", "Resolved"].map((s) => (
+              <option key={s}>{s}</option>
+            ))}
           </select>
-
-          {(search || statusFilter || severityFilter) && (
-            <span
-              style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}
-              aria-live="polite"
-            >
-              {filtered.length} result{filtered.length !== 1 ? 's' : ''}
-            </span>
-          )}
         </div>
-      )}
 
-      {loading && <LoadingSpinner message="Loading operational data…" />}
-
-      {(reportsLoadState === 'error' || reportsLoadState === 'permission-denied' || reportsLoadState === 'not-configured') && (
-        <ErrorState type={reportsLoadState === 'not-configured' ? 'not-configured' : reportsLoadState} message={error ?? undefined} />
-      )}
-
-      {reportsLoadState === 'success' && reports.length === 0 && (
-        <EmptyState title="No incidents found" message="Incidents submitted through the RSQ Android app will appear here automatically." />
-      )}
-
-      {reportsLoadState === 'success' && reports.length > 0 && filtered.length === 0 && (
-        <EmptyState title="No incidents match your filters" message="Try adjusting your search or filter criteria." />
-      )}
-
-      {reportsLoadState === 'success' && filtered.length > 0 && (
-        <div className="table-wrapper">
-          <table className="data-table" role="table" aria-label="Incidents">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-sm">
             <thead>
-              <tr>
-                <th scope="col">Severity</th>
-                <th scope="col">Incident</th>
-                <th scope="col">Location</th>
-                <th scope="col">Status</th>
-                <th scope="col">Assigned Units</th>
-                <th scope="col">Reported</th>
+              <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="pb-2 font-medium">ID</th>
+                <th className="pb-2 font-medium">Type</th>
+                <th className="pb-2 font-medium">Location</th>
+                <th className="pb-2 font-medium">Severity</th>
+                <th className="pb-2 font-medium">Status</th>
+                <th className="pb-2 font-medium">Units</th>
+                <th className="pb-2 font-medium">Responder</th>
+                <th className="pb-2 font-medium">Reported</th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.map((report) => {
-                const sv = getSeverityVariant(report.severity);
-                const rowClass = sv === 'critical' ? 'row-critical' : sv === 'high' ? 'row-high' : '';
-                
-                const volName = report.assignedVolunteerId ? intelligence.volMap.get(report.assignedVolunteerId) : null;
-                const resCount = report.assignedResourceIds?.length || 0;
-
-                return (
-                  <tr
-                    key={report.reportId}
-                    id={`report-row-${report.reportId}`}
-                    className={`cursor-pointer hover:bg-surface-1 transition-colors ${rowClass}`}
-                    onClick={() => navigate(`/reports/${report.reportId}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        navigate(`/reports/${report.reportId}`);
-                      }
-                    }}
-                    tabIndex={0}
-                    role="row"
-                    aria-label={`Incident ${formatReportId(report.reportId)}`}
-                  >
-                    <td>
-                      <SeverityBadge value={report.severity} />
-                    </td>
-                    <td>
-                      <div className="font-semibold text-primary">{report.title ? truncate(report.title, 40) : 'Emergency Report'}</div>
-                      <div className="text-xs text-tertiary" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{formatReportId(report.reportId)}</div>
-                    </td>
-                    <td className="text-sm font-medium text-secondary" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {formatCoordinates(report.latitude, report.longitude)}
-                    </td>
-                    <td>
-                      <StatusBadge value={report.status} />
-                    </td>
-                    <td>
-                       <div className="flex flex-col gap-1">
-                          {volName ? <span className="text-[10px] bg-info/10 text-info px-1 rounded inline-block w-max">Vol: {volName}</span> : <span className="text-[10px] text-tertiary">Vol: —</span>}
-                          {resCount > 0 ? <span className="text-[10px] bg-info/10 text-info px-1 rounded inline-block w-max">Res: {resCount} unit(s)</span> : <span className="text-[10px] text-tertiary">Res: —</span>}
-                       </div>
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }} className="text-secondary text-sm">
-                      {formatTimestamp(report.timestamp)}
-                    </td>
-                  </tr>
-                );
-              })}
+            <tbody className="divide-y divide-border">
+              {rows.map((i) => (
+                <tr
+                  key={i.reportId}
+                  className="hover:bg-accent/40 cursor-pointer"
+                  onClick={() => navigate(`/reports/${i.reportId}`)}
+                >
+                  <td className="py-3 font-mono text-xs text-muted-foreground">{i.reportId.slice(0, 8)}</td>
+                  <td className="py-3 font-medium">{i.title || i.incidentType || 'Unknown'}</td>
+                  <td className="py-3 text-muted-foreground">{typeof i.latitude === 'number' && typeof i.longitude === 'number' ? `${i.latitude.toFixed(4)}, ${i.longitude.toFixed(4)}` : 'Unknown'}</td>
+                  <td className="py-3"><StatusBadge label={(i.severity as string) || "UNKNOWN"} /></td>
+                  <td className="py-3"><StatusBadge label={(i.status as string) || "OPEN"} /></td>
+                  <td className="py-3 tabular-nums">{i.assignedVolunteerId ? 1 : 0}</td>
+                  <td className="py-3 text-muted-foreground">{i.assignedVolunteerId ? "Assigned" : "None"}</td>
+                  <td className="py-3 font-mono text-xs text-muted-foreground">
+                    {i.timestamp ? new Date(i.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : '—'}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                    No incidents match these filters.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
-      )}
+      </Panel>
+      {showReportModal && user ? <ReportModal authorityUid={user.uid} onClose={() => setShowReportModal(false)} onSuccess={(reportId) => navigate(`/reports/${reportId}`)} /> : null}
     </>
   );
 }

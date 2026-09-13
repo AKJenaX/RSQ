@@ -1,134 +1,142 @@
-import React, { useState, useMemo } from 'react';
-import { useResources } from '../hooks/useResources';
-import { LoadingSpinner } from '../components/LoadingSpinner';
-import { ErrorState } from '../components/ErrorState';
-import { EmptyState } from '../components/EmptyState';
-import { Search } from 'lucide-react';
+import { useState } from "react";
+import { PackagePlus } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { PageHeader, Panel, StatCard, StatusBadge, Bar as MiniBar } from "../components/ui-kit";
+import { useResources } from "../hooks/useResources";
+import { ResourceModal } from "../components/Modals/ResourceModal";
+import type { Resource } from "../types/incident";
 
-export function ResourcesPage(): React.ReactElement {
-  const { resources, loadState, error } = useResources();
+const tooltipStyle = {
+  backgroundColor: "var(--color-card)",
+  border: "1px solid var(--color-border)",
+  borderRadius: "8px",
+  fontSize: "12px",
+};
 
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+export function ResourcesPage() {
+  const { resources, loadState } = useResources();
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  const [showResourceModal, setShowResourceModal] = useState(false);
 
-  const filtered = useMemo(() => {
-    return resources.filter((r) => {
-      const q = search.toLowerCase();
-      const matchesSearch = !q || r.name.toLowerCase().includes(q) || r.type.toLowerCase().includes(q);
-      const matchesStatus = !statusFilter || r.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [resources, search, statusFilter]);
-
-  const stats = useMemo(() => {
-    const total = resources.length;
-    const available = resources.filter(r => r.status === 'AVAILABLE').length;
-    const assigned = resources.filter(r => r.status === 'ASSIGNED').length;
-    const unavailable = resources.filter(r => r.status === 'UNAVAILABLE').length;
-    return { total, available, assigned, unavailable };
-  }, [resources]);
+  const closeResourceModal = () => {
+    setShowResourceModal(false);
+    setEditingResource(null);
+  };
 
   return (
     <>
-      <div className="page-header">
-        <h1 className="page-title">Resource Operations</h1>
-        <p className="page-subtitle">
-          Manage physical response assets and deployment
-          {loadState === 'success' && ` · ${stats.available} of ${stats.total} Available`}
+      <PageHeader
+        title="Resource Inventory"
+        subtitle="Fleet, equipment and relief stock across all depots"
+        actions={
+          <button onClick={() => setShowResourceModal(true)} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
+            <PackagePlus className="h-4 w-4" /> Add stock
+          </button>
+        }
+      />
+      {loadState === 'permission-denied' && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          You do not have permission to view resource records.
         </p>
-      </div>
+      )}
+      {loadState === 'error' && (
+        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          Resource records could not be loaded. Please check your connection.
+        </p>
+      )}
 
-      {loadState === 'success' && resources.length > 0 && (
-        <>
-          {/* Capacity Top Bar */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-             <div className="card border-l-4" style={{ borderLeftColor: 'var(--text-tertiary)' }}>
-                <span className="text-xs uppercase font-bold text-tertiary">Total</span>
-                <div className="text-2xl font-bold mt-1 text-primary">{stats.total}</div>
-             </div>
-             <div className="card border-l-4" style={{ borderLeftColor: 'var(--success)' }}>
-                <span className="text-xs uppercase font-bold text-success">Available</span>
-                <div className="text-2xl font-bold mt-1 text-primary">{stats.available}</div>
-             </div>
-             <div className="card border-l-4" style={{ borderLeftColor: 'var(--info)' }}>
-                <span className="text-xs uppercase font-bold text-info">Assigned</span>
-                <div className="text-2xl font-bold mt-1 text-primary">{stats.assigned}</div>
-             </div>
-             <div className="card border-l-4" style={{ borderLeftColor: 'var(--text-tertiary)' }}>
-                <span className="text-xs uppercase font-bold text-tertiary">Unavailable</span>
-                <div className="text-2xl font-bold mt-1 text-primary">{stats.unavailable}</div>
-             </div>
+      {(() => {
+        const totalUnits = resources.reduce((acc, r) => acc + (r.totalUnits ?? 1), 0);
+        const availableUnits = resources.reduce((acc, r) => acc + (r.availableUnits ?? (r.status === 'AVAILABLE' ? 1 : 0)), 0);
+        const maintenanceUnits = resources.reduce((acc, r) => acc + (r.maintenanceUnits ?? (r.status === 'UNAVAILABLE' ? 1 : 0)), 0);
+        const availabilityPct = totalUnits > 0 ? Math.round((availableUnits / totalUnits) * 100) : 0;
+
+        return (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label="Asset Categories" value={Array.from(new Set(resources.map(r => r.type))).length.toString()} hint="tracked lines" />
+            <StatCard label="Availability" value={`${availabilityPct}%`} hint="fleet-wide" />
+            <StatCard label="In Maintenance" value={maintenanceUnits.toString()} hint="units offline" />
+            <StatCard label="Low Stock Alerts" value={resources.filter(r => (r.availableUnits ?? (r.status === 'AVAILABLE' ? 1 : 0)) === 0).length.toString()} hint="assets" />
           </div>
+        );
+      })()}
 
-          <div className="table-toolbar">
-            <div className="search-input-wrapper">
-              <Search className="search-icon" size={16} aria-hidden="true" />
-              <input
-                type="search"
-                className="search-input"
-                placeholder="Search by name or type…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                aria-label="Search resources"
-              />
-            </div>
-
-            <select
-              className="filter-select"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filter by status"
-            >
-              <option value="">All Statuses</option>
-              <option value="AVAILABLE">Available</option>
-              <option value="ASSIGNED">Assigned</option>
-              <option value="UNAVAILABLE">Unavailable</option>
-            </select>
-          </div>
-        </>
-      )}
-
-      {loadState === 'loading' && <LoadingSpinner message="Loading resources…" />}
-
-      {(loadState === 'error' || loadState === 'permission-denied') && (
-        <ErrorState type={loadState} message={error ?? undefined} />
-      )}
-
-      {loadState === 'success' && resources.length === 0 && (
-        <EmptyState title="No resources found" message="No resources are currently registered in the system." type="default" />
-      )}
-
-      {loadState === 'success' && stats.total > 0 && stats.available === 0 && (!statusFilter || statusFilter === 'AVAILABLE') && (
-        <EmptyState title="0 AVAILABLE" message="No physical resources are currently available for assignment." type="warning" />
-      )}
-
-      {loadState === 'success' && filtered.length > 0 && (
-        <div className="table-wrapper">
-          <table className="data-table" role="table">
-            <thead>
-              <tr>
-                <th scope="col">Status</th>
-                <th scope="col">Name</th>
-                <th scope="col">Type</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((resource) => (
-                <tr key={resource.id} className="cursor-default">
-                  <td style={{ width: '120px' }}>
-                    <div className={`ops-indicator bg-status-${resource.status.toLowerCase()} inline-block mr-2 align-middle`} />
-                    <span className={`text-status-${resource.status.toLowerCase()} text-xs font-bold uppercase`}>
-                      {resource.status.replace('_', ' ')}
-                    </span>
-                  </td>
-                  <td className="font-semibold text-primary">{resource.name}</td>
-                  <td className="text-secondary">{resource.type}</td>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel title="Depot Inventory" description="Available against total holdings" className="lg:col-span-2">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
+                  <th className="pb-2 font-medium">Asset</th>
+                  <th className="pb-2 font-medium">Depot</th>
+                  <th className="pb-2 font-medium">Availability</th>
+                  <th className="pb-2 font-medium">On Hand</th>
+                  <th className="pb-2 font-medium">Condition</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody className="divide-y divide-border">
+                {resources.map((r) => {
+                  const avail = r.availableUnits ?? (r.status === "AVAILABLE" ? 1 : 0);
+                  const total = r.totalUnits ?? 1;
+                  return (
+                    <tr key={r.id} className="cursor-pointer hover:bg-accent/40" onClick={() => { setEditingResource(r); setShowResourceModal(true); }}>
+                      <td className="py-3 font-medium">{r.name}</td>
+                      <td className="py-3 text-muted-foreground">{typeof r.latitude === 'number' && typeof r.longitude === 'number' ? `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}` : "Unknown"}</td>
+                      <td className="w-40 py-3">
+                        <MiniBar value={avail} max={total || 1} />
+                      </td>
+                      <td className="py-3 tabular-nums">
+                        {avail}
+                        <span className="text-muted-foreground"> / {total}</span>
+                      </td>
+                      <td className="py-3"><StatusBadge label={r.status} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+
+        <Panel title="Utilisation" description="Deployed units by asset">
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                layout="vertical"
+                data={resources.map((r) => {
+                  const avail = r.availableUnits ?? (r.status === "AVAILABLE" ? 1 : 0);
+                  const total = r.totalUnits ?? 1;
+                  return { name: r.name, used: Math.max(0, total - avail) };
+                })}
+                margin={{ left: 10 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
+                <XAxis type="number" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  stroke="var(--color-muted-foreground)"
+                  fontSize={11}
+                  width={92}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "var(--color-accent)" }} />
+                <Bar dataKey="used" fill="var(--color-chart-1)" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+      </div>
+      {showResourceModal ? <ResourceModal resource={editingResource ?? undefined} onClose={closeResourceModal} /> : null}
     </>
   );
 }

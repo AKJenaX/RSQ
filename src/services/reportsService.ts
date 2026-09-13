@@ -30,8 +30,7 @@ import {
   collection,
   doc,
   onSnapshot,
-  query,
-  orderBy,
+  setDoc,
   Timestamp,
 } from 'firebase/firestore';
 import type {
@@ -50,6 +49,7 @@ const FIELDS = {
   title: 'title',
   description: 'description',
   imageUrl: 'imageUrl',
+  imageUrls: 'imageUrls',
   latitude: 'latitude',
   longitude: 'longitude',
   severity: 'severity',
@@ -64,6 +64,7 @@ const FIELDS = {
   resolvedAt: 'resolvedAt',
   resolvedBy: 'resolvedBy',
   resolutionNote: 'resolutionNote',
+  originalVictimId: 'originalVictimId',
 } as const;
 
 // Plain string set of known field names (for extras collection)
@@ -141,17 +142,19 @@ function mapDocumentToReport(snapshot: DocumentSnapshot): DisasterReport {
     title: readString(data, FIELDS.title),
     description: readString(data, FIELDS.description),
     imageUrl: readString(data, FIELDS.imageUrl),
+    imageUrls: readStringArray(data, FIELDS.imageUrls),
     latitude: readNumber(data, FIELDS.latitude),
     longitude: readNumber(data, FIELDS.longitude),
-    severity: readString(data, FIELDS.severity),
-    status: readString(data, FIELDS.status),
+    severity: readString(data, FIELDS.severity)?.toUpperCase(),
+    status: readString(data, FIELDS.status)?.toUpperCase(),
     timestamp: readTimestampAsMs(data, FIELDS.timestamp),
     userId: readString(data, FIELDS.userId),
+    originalVictimId: readString(data, FIELDS.originalVictimId),
     assignedVolunteerId: readString(data, FIELDS.assignedVolunteerId),
     assignedResourceIds: readStringArray(data, FIELDS.assignedResourceIds),
-    assignedAt: readNumber(data, FIELDS.assignedAt),
+    assignedAt: readTimestampAsMs(data, FIELDS.assignedAt),
     assignedBy: readString(data, FIELDS.assignedBy),
-    resolvedAt: readNumber(data, FIELDS.resolvedAt),
+    resolvedAt: readTimestampAsMs(data, FIELDS.resolvedAt),
     resolvedBy: readString(data, FIELDS.resolvedBy),
     resolutionNote: readString(data, FIELDS.resolutionNote),
     extras: Object.keys(extras).length > 0 ? extras : undefined,
@@ -172,19 +175,42 @@ export function subscribeToReports(
   onData: (reports: DisasterReport[]) => void,
   onError: (error: FirestoreError) => void
 ): Unsubscribe {
-  const reportsRef = collection(db, REPORTS_COLLECTION);
-  // Use string directly to avoid const-narrowing issues with orderBy
-  const timestampField: string = FIELDS.timestamp;
-  const reportsQuery = query(reportsRef, orderBy(timestampField, 'desc'));
-
   return onSnapshot(
-    reportsQuery,
+    collection(db, REPORTS_COLLECTION),
     (snapshot: QuerySnapshot) => {
-      const reports = snapshot.docs.map(mapDocumentToReport);
+      // Sorting in the client preserves reports that have no timestamp yet.
+      // Firestore's orderBy would otherwise omit those documents entirely.
+      const reports = snapshot.docs
+        .map(mapDocumentToReport)
+        .sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
       onData(reports);
     },
     onError
   );
+}
+
+export interface NewReportInput {
+  title: string;
+  description: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  latitude?: number;
+  longitude?: number;
+}
+
+/** Creates an authority-entered incident using the same schema as mobile reports. */
+export async function createReport(input: NewReportInput, userId: string): Promise<string> {
+  const reportRef = doc(collection(db, REPORTS_COLLECTION));
+  await setDoc(reportRef, {
+    title: input.title.trim(),
+    description: input.description.trim(),
+    severity: input.severity,
+    status: 'OPEN',
+    timestamp: Date.now(),
+    userId,
+    ...(input.latitude !== undefined ? { latitude: input.latitude } : {}),
+    ...(input.longitude !== undefined ? { longitude: input.longitude } : {}),
+  });
+  return reportRef.id;
 }
 
 /**

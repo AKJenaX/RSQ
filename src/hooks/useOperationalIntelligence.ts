@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+﻿import { useMemo } from 'react';
 import type { DisasterReport } from '../types/report';
 import type { Volunteer, Resource } from '../types/incident';
 
@@ -84,7 +84,7 @@ export function useOperationalIntelligence(
     let totalResolveTime = 0;
     let resolveCount = 0;
 
-    const incidentQueue: IntelligenceReport[] = reports.map(r => {
+        const incidentQueue: IntelligenceReport[] = reports.map(r => {
       const hasVol = !!r.assignedVolunteerId;
       const hasRes = !!(r.assignedResourceIds && r.assignedResourceIds.length > 0);
       const isResolved = r.status === 'RESOLVED';
@@ -106,28 +106,24 @@ export function useOperationalIntelligence(
       if (isResolved) {
         score = 6;
         reason = 'Resolved';
-      } else if (r.severity === 'CRITICAL' && (!hasVol && !hasRes)) {
+      } else if (r.severity === 'CRITICAL') {
         score = 1;
-        reason = 'Critical & Unassigned';
-        attention = true;
-      } else if (r.severity === 'CRITICAL' && (!hasVol || !hasRes)) {
+        reason = 'Critical';
+        if (!hasVol || !hasRes) attention = true;
+      } else if (r.status === 'ESCALATED') {
         score = 2;
-        reason = hasVol ? 'Critical (Missing Resources)' : 'Critical (Missing Volunteer)';
+        reason = 'Escalated';
         attention = true;
-      } else if (r.severity === 'HIGH' && (!hasVol && !hasRes)) {
+      } else if (r.severity === 'HIGH') {
         score = 3;
-        reason = 'High & Unassigned';
-        attention = true;
-      } else if (r.severity === 'HIGH' && (!hasVol || !hasRes)) {
+        reason = 'High';
+        if (!hasVol || !hasRes) attention = true;
+      } else if (r.severity === 'MEDIUM') {
         score = 4;
-        reason = hasVol ? 'High (Missing Resources)' : 'High (Missing Volunteer)';
-        // Attention is required for high severity incidents lacking capacity if we are low on capacity
-        if (volunteersRatio !== null && volunteersRatio < 0.3) {
-          attention = true;
-        }
-      } else if (r.status === 'IN_PROGRESS' || r.status === 'ASSIGNED') {
+        reason = 'Medium';
+      } else {
         score = 5;
-        reason = 'In Progress';
+        reason = 'Low';
       }
 
       return {
@@ -143,7 +139,7 @@ export function useOperationalIntelligence(
       if (a.priorityScore !== b.priorityScore) {
         return a.priorityScore - b.priorityScore;
       }
-      return (b.timestamp || 0) - (a.timestamp || 0); // Newest first for same priority
+      return (a.timestamp || 0) - (b.timestamp || 0); // Oldest first for same priority
     });
 
     const attentionItems = incidentQueue.filter(r => r.isAttentionRequired);
@@ -206,3 +202,5 @@ export function useOperationalIntelligence(
     };
   }, [reports, volunteers, resources]);
 }
+
+

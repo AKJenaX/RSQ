@@ -15,7 +15,7 @@ export function Header({ title, subtitle }: HeaderProps): React.ReactElement {
         {subtitle && <div className="header-subtitle">{subtitle}</div>}
       </div>
 
-      <div className="header-right">
+      <div className="header-right flex items-center gap-4">
         {/* Live indicator */}
         <div className="live-indicator" title="Real-time updates active">
           <div className="live-dot" aria-hidden="true" />

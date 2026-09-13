@@ -88,6 +88,12 @@ export interface DisasterReport {
    */
   userId?: string;
 
+  /**
+   * Identity of the original victim/report originator.
+   * Corresponds to Firestore field: originalVictimId
+   */
+  originalVictimId?: string;
+
   // ── Assignment & Resolution extensions ──────────────────────────────────────
 
   /**
@@ -124,6 +130,36 @@ export interface DisasterReport {
    * Note provided upon resolution.
    */
   resolutionNote?: string;
+
+  /**
+   * Type of incident (e.g., FLOOD, FIRE, etc.)
+   */
+  incidentType?: string;
+
+  /**
+   * AI severity score
+   */
+  aiScore?: number;
+
+  /**
+   * Risk level
+   */
+  riskLevel?: string;
+
+  /**
+   * Detected hazards
+   */
+  detectedHazards?: string[];
+
+  /**
+   * Recommended resources
+   */
+  recommendedResources?: string[];
+
+  /**
+   * List of image URLs
+   */
+  imageUrls?: string[];
 
   /**
    * Any additional Firestore fields not part of the known verified schema.
