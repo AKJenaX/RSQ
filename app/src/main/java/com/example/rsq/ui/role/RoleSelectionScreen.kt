@@ -25,12 +25,15 @@ import androidx.compose.ui.window.DialogProperties
 import com.example.rsq.R
 import com.example.rsq.location.model.LocationReadiness
 import com.example.rsq.location.model.LocationState
+import com.example.rsq.nearby.model.NearbyReadiness
+import com.example.rsq.nearby.model.NearbyState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RoleSelectionScreen(
     isAuthorized: Boolean,
     locationState: LocationState,
+    nearbyState: NearbyState,
     onLogout: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenDonations: () -> Unit,
@@ -88,6 +91,55 @@ fun RoleSelectionScreen(
         }
     }
 
+    // Mandatory Nearby Services Popup
+    if (nearbyState.readiness == NearbyReadiness.SERVICES_DISABLED) {
+        Dialog(
+            onDismissRequest = { /* Non-dismissible */ },
+            properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.BluetoothDisabled,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = stringResource(R.string.nearby_required),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.nearby_required_description),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            Log.d(TAG, "BLUETOOTH_SETTINGS_OPENED")
+                            context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(stringResource(R.string.enable_nearby), fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -132,35 +184,71 @@ fun RoleSelectionScreen(
                 modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
             )
 
-            // Location Status Indicator
-            Surface(
-                color = when (locationState.readiness) {
-                    LocationReadiness.READY -> Color(0xFFE8F5E9)
-                    else -> Color(0xFFFFF3E0)
-                },
-                shape = RoundedCornerShape(12.dp),
+            // Status Indicators Section
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.padding(bottom = 48.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Location Status Indicator
+                Surface(
+                    color = when (locationState.readiness) {
+                        LocationReadiness.READY -> Color(0xFFE8F5E9)
+                        else -> Color(0xFFFFF3E0)
+                    },
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    if (locationState.readiness != LocationReadiness.READY) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text(
-                        text = when (locationState.readiness) {
-                            LocationReadiness.READY -> stringResource(R.string.location_ready)
-                            else -> stringResource(R.string.getting_location)
-                        },
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = when (locationState.readiness) {
-                            LocationReadiness.READY -> Color(0xFF2E7D32)
-                            else -> Color(0xFFEF6C00)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (locationState.readiness != LocationReadiness.READY) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
                         }
-                    )
+                        Text(
+                            text = when (locationState.readiness) {
+                                LocationReadiness.READY -> stringResource(R.string.location_ready)
+                                else -> stringResource(R.string.getting_location)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = when (locationState.readiness) {
+                                LocationReadiness.READY -> Color(0xFF2E7D32)
+                                else -> Color(0xFFEF6C00)
+                            }
+                        )
+                    }
+                }
+
+                // Nearby Status Indicator
+                Surface(
+                    color = when (nearbyState.readiness) {
+                        NearbyReadiness.READY -> Color(0xFFE3F2FD)
+                        else -> Color(0xFFFFF3E0)
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (nearbyState.readiness != NearbyReadiness.READY) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(
+                            text = when (nearbyState.readiness) {
+                                NearbyReadiness.READY -> stringResource(R.string.nearby_ready)
+                                else -> stringResource(R.string.getting_nearby)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = when (nearbyState.readiness) {
+                                NearbyReadiness.READY -> Color(0xFF1565C0)
+                                else -> Color(0xFFEF6C00)
+                            }
+                        )
+                    }
                 }
             }
 

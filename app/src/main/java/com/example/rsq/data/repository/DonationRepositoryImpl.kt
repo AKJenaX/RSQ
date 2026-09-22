@@ -15,7 +15,8 @@ class DonationRepositoryImpl : DonationRepository {
         )
     }
 
-    override fun getRecentDonations(): Flow<List<Donation>> = _donations.asStateFlow()
+    override fun getRecentDonations(userId: String): Flow<List<Donation>> = 
+        _donations.asStateFlow().map { list -> list.filter { it.userId == userId } }
 
     override fun getDonationSummary(): Flow<DonationSummary> = _donations.map { list ->
         DonationSummary(totalAmount = list.filter { it.status == "Completed" }.sumOf { it.amount })
@@ -25,4 +26,10 @@ class DonationRepositoryImpl : DonationRepository {
         // No longer used in secure production flow
         _donations.update { it + donation }
     }
+
+    override suspend fun getRecentDonationsOneShot(userId: String): List<Donation> = 
+        _donations.value.filter { it.userId == userId }
+
+    override suspend fun getDonationSummaryOneShot(): DonationSummary = 
+        DonationSummary(totalAmount = _donations.value.filter { it.status == "Completed" }.sumOf { it.amount })
 }

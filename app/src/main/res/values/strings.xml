@@ -24,6 +24,13 @@
     <string name="location_required_description">RSQ requires Location Services to provide emergency assistance. Please enable it in your system settings.</string>
     <string name="enable_location">ENABLE LOCATION</string>
 
+    <!-- Nearby / Bluetooth Dialog -->
+    <string name="nearby_required">Nearby Devices required</string>
+    <string name="nearby_required_description">RSQ requires Bluetooth and Nearby Devices to communicate with nearby rescuers without internet. Please enable it in your system settings.</string>
+    <string name="enable_nearby">ENABLE BLUETOOTH</string>
+    <string name="nearby_ready">Nearby Ready</string>
+    <string name="getting_nearby">Starting Nearby...</string>
+
     <!-- Victim Home -->
     <string name="emergency_mode">Emergency Mode</string>
     <string name="ready_to_help">Ready to Help</string>

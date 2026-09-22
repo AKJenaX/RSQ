@@ -4,13 +4,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.SavedStateHandle
@@ -55,6 +59,9 @@ import com.example.rsq.ui.permission.PermissionScreen
 import com.example.rsq.ui.response.AssignmentScreen
 import com.example.rsq.location.data.LocationRepository
 import com.example.rsq.location.viewmodel.LocationViewModel
+import com.example.rsq.nearby.data.NearbyRepository
+import com.example.rsq.nearby.model.NearbyState
+import com.example.rsq.nearby.viewmodel.NearbyViewModel
 import com.google.android.gms.location.LocationServices
 import com.example.rsq.ui.role.RoleSelectionScreen
 import com.example.rsq.ui.volunteer.VolunteerDashboardScreen
@@ -94,6 +101,7 @@ sealed class Screen(val route: String) {
 @Composable
 fun AppNavigation() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -123,6 +131,16 @@ fun AppNavigation() {
         factory = viewModelFactory {
             initializer {
                 LocationViewModel(locationRepository)
+            }
+        }
+    )
+
+    // Nearby Management
+    val nearbyRepository = remember { NearbyRepository(context, meshTransport) }
+    val nearbyViewModel: NearbyViewModel = viewModel(
+        factory = viewModelFactory {
+            initializer {
+                NearbyViewModel(nearbyRepository)
             }
         }
     )
@@ -170,10 +188,27 @@ fun AppNavigation() {
     val authState by authViewModel.authState.collectAsState()
     val userProfile by authViewModel.currentUserProfile.collectAsState()
     val locationState by locationViewModel.locationState.collectAsState()
+    val nearbyState by nearbyViewModel.nearbyState.collectAsState()
 
     // Session check
     LaunchedEffect(Unit) {
         authViewModel.checkSession()
+    }
+
+    // Handle return from Settings / App Resume
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (userProfile != null) {
+                    locationViewModel.fetchLocation()
+                    nearbyViewModel.startDetection()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Role-based auto-navigation after session restore or login
@@ -214,9 +249,11 @@ fun AppNavigation() {
             }
 
             // Start Mesh Communication Service automatically
-            meshTransport.start()
+            launch {
+                nearbyViewModel.nearbyReadiness.collect { }
+            }
         } else {
-            meshTransport.stop()
+            nearbyRepository.stopDetection()
         }
     }
 
@@ -326,6 +363,7 @@ fun AppNavigation() {
             RoleSelectionScreen(
                 isAuthorized = userProfile?.isAuthorized ?: false,
                 locationState = locationState,
+                nearbyState = nearbyState,
                 onLogout = { authViewModel.logout() },
                 onOpenProfile = { navController.navigate(Screen.Profile.route) },
                 onOpenDonations = { navController.navigate(Screen.Donation.route) },
@@ -400,6 +438,7 @@ fun AppNavigation() {
             ReportSubmissionScreen(
                 viewModel = reportViewModel,
                 locationViewModel = locationViewModel,
+                nearbyViewModel = nearbyViewModel,
                 currentUserId = authViewModel.getCurrentUserId(),
                 onNavigateBack = {
                     navController.popBackStack()

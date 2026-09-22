@@ -13,9 +13,9 @@ import com.example.rsq.data.repository.DonationRepositoryImpl
 import com.example.rsq.data.network.NetworkModule
 import com.example.rsq.data.repository.FirestoreDonationRepository
 import com.example.rsq.util.PaymentResultHandler
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.*
 
 sealed class PaymentState {
@@ -71,16 +71,23 @@ class DonationViewModel(
     }
 
     fun loadData() {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (uid == null) {
+            _uiState.value = UiState.Error("User not authenticated")
+            return
+        }
+
         viewModelScope.launch {
             _uiState.value = UiState.Loading
 
             combine(
                 repository.getDonationSummary(),
-                repository.getRecentDonations()
+                repository.getRecentDonations(uid)
             ) { summary, donations ->
                 summary to donations
             }
             .catch { e ->
+                Log.e("DONATION", "Impact Fund Data Error", e)
                 _uiState.value = UiState.Error("Access denied or connection lost: ${e.message}")
             }
             .collect { (summary, donations) ->

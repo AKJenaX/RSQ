@@ -380,6 +380,12 @@ fun startRazorpayCheckout(
     userName: String,
     userEmail: String
 ) {
+    if (orderId.isBlank()) {
+        Log.e("DONATION", "[DONATION] Error: Order ID is empty!")
+        Toast.makeText(context, "Error: Payment failed - Invalid Order ID", Toast.LENGTH_LONG).show()
+        return
+    }
+
     var activity: Activity? = context as? Activity
     if (activity == null && context is ContextWrapper) {
         var base = context.baseContext
@@ -396,7 +402,8 @@ fun startRazorpayCheckout(
     }
 
     val checkout = Checkout()
-    checkout.setKeyID("rzp_test_TVvZzrCuli56f5") // Razorpay TEST Key ID
+    // Explicitly set the key again to be sure
+    checkout.setKeyID("rzp_test_TVvZzrCuli56f5")
 
     try {
         val options = JSONObject()
@@ -407,21 +414,25 @@ fun startRazorpayCheckout(
         options.put("theme.color", "#1976D2")
         options.put("currency", "INR")
         
-        // Use Math.round to avoid floating point precision issues during conversion
         val amountInPaise = Math.round(amount * 100).toInt()
         options.put("amount", amountInPaise)
         
-        // Prefill details improve payment method visibility (especially UPI)
         val prefill = JSONObject()
-        prefill.put("name", userName)
+        prefill.put("name", userName.ifBlank { "Anonymous Donor" })
         prefill.put("email", userEmail.ifBlank { "test@example.com" })
-        prefill.put("contact", "9999999999") // Required for some UPI flows in test mode
+        prefill.put("contact", "9999999999")
         options.put("prefill", prefill)
 
-        // Force local to India to ensure domestic test cards work
+        // For Android 11+ UPI visibility
         options.put("send_sms_hash", true)
         
-        Log.d("DONATION", "[DONATION] opening Razorpay Checkout")
+        // Retry logic for unstable network connections
+        val retry = JSONObject()
+        retry.put("enabled", true)
+        retry.put("max_count", 4)
+        options.put("retry", retry)
+        
+        Log.d("DONATION", "[DONATION] opening Razorpay Checkout for order $orderId")
         checkout.open(activity, options)
     } catch (e: Exception) {
         Log.e("Razorpay", "Error in starting Razorpay Checkout", e)

@@ -21,6 +21,10 @@
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
 
     <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
         <package android:name="com.google.android.apps.nbu.paisa.user" />
         <package android:name="com.phonepe.app" />
         <package android:name="com.whatsapp" />
@@ -41,6 +45,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:hardwareAccelerated="true"
         android:theme="@style/Theme.RSQ">
 
         <meta-data

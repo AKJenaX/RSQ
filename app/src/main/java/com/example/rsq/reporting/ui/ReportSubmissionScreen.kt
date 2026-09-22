@@ -50,6 +50,9 @@ import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.location.viewmodel.LocationViewModel
 import com.example.rsq.location.data.LocationRepository
 import com.example.rsq.location.model.LocationReadiness
+import com.example.rsq.nearby.model.NearbyReadiness
+import com.example.rsq.nearby.model.NearbyState
+import com.example.rsq.nearby.viewmodel.NearbyViewModel
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -59,6 +62,7 @@ import kotlinx.coroutines.launch
 fun ReportSubmissionScreen(
     viewModel: ReportViewModel,
     locationViewModel: LocationViewModel,
+    nearbyViewModel: NearbyViewModel,
     currentUserId: String,
     onNavigateBack: () -> Unit
 ) {
@@ -66,6 +70,7 @@ fun ReportSubmissionScreen(
     val coroutineScope = rememberCoroutineScope()
     
     val locationState by locationViewModel.locationReadiness.collectAsState()
+    val nearbyState by nearbyViewModel.nearbyReadiness.collectAsState()
     val reportState by viewModel.reportState.collectAsState()
 
     val title by viewModel.title.collectAsState()
@@ -190,6 +195,24 @@ fun ReportSubmissionScreen(
                 },
                 onRetry = {
                     locationViewModel.fetchLocation()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Nearby Readiness UI
+            NearbyReadinessSection(
+                state = nearbyState,
+                onEnableNearby = {
+                    context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+                },
+                onGrantPermission = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.fromParts("package", context.packageName, null)
+                    })
+                },
+                onRetry = {
+                    nearbyViewModel.startDetection()
                 }
             )
 
@@ -450,6 +473,83 @@ fun ReportSubmissionScreen(
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NearbyReadinessSection(
+    state: com.example.rsq.nearby.model.NearbyState,
+    onEnableNearby: () -> Unit,
+    onGrantPermission: () -> Unit,
+    onRetry: () -> Unit
+) {
+    val color = when (state.readiness) {
+        NearbyReadiness.READY -> Color(0xFFE3F2FD) // Light Blue
+        NearbyReadiness.DETECTING -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.errorContainer
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = color,
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 2.dp
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = when (state.readiness) {
+                        NearbyReadiness.READY -> Icons.Default.BluetoothConnected
+                        NearbyReadiness.SERVICES_DISABLED -> Icons.Default.BluetoothDisabled
+                        NearbyReadiness.PERMISSION_DENIED -> Icons.Default.NoEncryption
+                        NearbyReadiness.DETECTING -> Icons.Default.BluetoothSearching
+                        else -> Icons.Default.Error
+                    },
+                    contentDescription = null,
+                    tint = if (state.readiness == NearbyReadiness.READY) Color(0xFF1565C0) else MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    val statusText = when (state.readiness) {
+                        NearbyReadiness.READY -> stringResource(R.string.nearby_ready)
+                        NearbyReadiness.SERVICES_DISABLED -> "Bluetooth Services Disabled"
+                        NearbyReadiness.PERMISSION_DENIED -> "Nearby Permission Required"
+                        NearbyReadiness.DETECTING -> stringResource(R.string.getting_nearby)
+                        else -> "Nearby Error"
+                    }
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    if (state.readiness == NearbyReadiness.READY) {
+                        Text(
+                            text = "Connected Peers: ${state.connectedPeers} • Offline Mode Active",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else if (state.error != null) {
+                        Text(text = state.error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+
+                when (state.readiness) {
+                    NearbyReadiness.SERVICES_DISABLED -> {
+                        TextButton(onClick = onEnableNearby) { Text("Enable") }
+                    }
+                    NearbyReadiness.PERMISSION_DENIED -> {
+                        TextButton(onClick = onGrantPermission) { Text("Grant") }
+                    }
+                    NearbyReadiness.ERROR -> {
+                        IconButton(onClick = onRetry) { Icon(Icons.Default.Refresh, contentDescription = "Retry") }
+                    }
+                    NearbyReadiness.DETECTING -> {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    }
+                    else -> {}
                 }
             }
         }

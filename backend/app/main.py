@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Body
 from .schemas import OrderRequest, OrderResponse, VerificationRequest, VerificationResponse
 from .razorpay_service import razorpay_client
 from .firebase_config import db
+from firebase_admin import firestore
 from datetime import datetime
 import uuid
 
@@ -54,36 +55,60 @@ async def verify_payment(request: VerificationRequest):
         if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=f"Razorpay verification error: {str(e)}")
 
-    # 3. Payment is valid, now create/update donation in Firestore
+    # 3. Payment is valid, now create/update donation in Firestore using an atomic transaction
     try:
-        # Idempotency check: check if this payment_id already exists
+        transaction = db.transaction()
         donation_ref = db.collection("donations").document(request.razorpay_payment_id)
-        doc = donation_ref.get()
+        balance_ref = db.collection("funds").document("global_balance")
 
-        if doc.exists:
+        @firestore.transactional
+        def update_in_transaction(transaction, donation_ref, balance_ref, request_data):
+            # A. Idempotency check: check if this payment_id already exists
+            snapshot = donation_ref.get(transaction=transaction)
+            if snapshot.exists:
+                return "ALREADY_EXISTS"
+
+            # B. Create donation record
+            now = datetime.now()
+            donation_doc = {
+                "id": request_data.razorpay_payment_id,
+                "userId": request_data.user_id,
+                "donorName": request_data.donor_name,
+                "amount": request_data.amount,
+                "date": now.strftime("%Y-%m-%d"),
+                "status": "Completed",
+                "orderId": request_data.razorpay_order_id,
+                "paymentId": request_data.razorpay_payment_id,
+                "timestamp": int(now.timestamp() * 1000)
+            }
+            transaction.set(donation_ref, donation_doc)
+
+            # C. Update Global Balance
+            balance_snapshot = balance_ref.get(transaction=transaction)
+            if balance_snapshot.exists:
+                balance_data = balance_snapshot.to_dict()
+                transaction.update(balance_ref, {
+                    "totalBalance": balance_data.get("totalBalance", 0.0) + request_data.amount,
+                    "totalDonations": balance_data.get("totalDonations", 0) + 1,
+                    "updatedAt": firestore.firestore.SERVER_TIMESTAMP
+                })
+            else:
+                transaction.set(balance_ref, {
+                    "totalBalance": request_data.amount,
+                    "totalDonations": 1,
+                    "updatedAt": firestore.firestore.SERVER_TIMESTAMP
+                })
+
+            return "SUCCESS"
+
+        result = update_in_transaction(transaction, donation_ref, balance_ref, request)
+
+        if result == "ALREADY_EXISTS":
             return VerificationResponse(
                 status="success",
                 message="Payment already verified and recorded",
                 donation_id=request.razorpay_payment_id
             )
-
-        # Create new donation record
-        # Note: In a production app, we would verify the amount against the order in Razorpay
-
-        now = datetime.now()
-        donation_data = {
-            "id": request.razorpay_payment_id,
-            "userId": request.user_id,
-            "donorName": request.donor_name,
-            "amount": request.amount,
-            "date": now.strftime("%Y-%m-%d"),
-            "status": "Completed",
-            "orderId": request.razorpay_order_id,
-            "paymentId": request.razorpay_payment_id,
-            "timestamp": int(now.timestamp() * 1000)
-        }
-
-        donation_ref.set(donation_data)
 
         return VerificationResponse(
             status="success",

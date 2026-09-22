@@ -1,6 +1,7 @@
 package com.example.rsq
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -11,10 +12,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import android.util.Log
-import androidx.lifecycle.lifecycleScope
 import com.example.rsq.ai.data.SeverityEngine
 import com.example.rsq.ui.navigation.AppNavigation
 import com.example.rsq.ui.theme.RSQTheme
@@ -24,6 +21,7 @@ import com.example.rsq.util.PaymentSuccessData
 import com.razorpay.Checkout
 import com.razorpay.PaymentData
 import com.razorpay.PaymentResultWithDataListener
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
