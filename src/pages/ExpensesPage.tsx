@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useSearchParams } from "react-router-dom";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Plus, Search } from "lucide-react";
 import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
@@ -38,6 +39,20 @@ export function ExpensesPage() {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expandedExpenseId, setExpandedExpenseId] = useState<string | null>(null);
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const expenseId = searchParams.get('expenseId');
+
+  useEffect(() => {
+    if (expenseId) {
+      setExpandedExpenseId(expenseId);
+      setTimeout(() => {
+        const el = document.getElementById(`expense-${expenseId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }, [expenseId]);
   
   const handleApprove = async (id: string) => {
     if (!user) return;
@@ -139,7 +154,8 @@ export function ExpensesPage() {
                 return (
                   <React.Fragment key={e.id}>
                     <tr 
-                      className="hover:bg-accent/40 cursor-pointer transition-colors"
+                      id={`expense-${e.id}`}
+                      className={`cursor-pointer hover:bg-accent/40 transition-colors ${expandedExpenseId === e.id ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}
                       onClick={() => setExpandedExpenseId(expandedExpenseId === e.id ? null : (e.id || null))}
                     >
                       <td className="py-3 font-mono text-xs text-muted-foreground">{e.id}</td>

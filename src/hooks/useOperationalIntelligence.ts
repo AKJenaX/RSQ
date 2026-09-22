@@ -1,4 +1,4 @@
-﻿import { useMemo } from 'react';
+import { useMemo } from 'react';
 import type { DisasterReport } from '../types/report';
 import type { Volunteer, Resource } from '../types/incident';
 
@@ -139,7 +139,7 @@ export function useOperationalIntelligence(
       if (a.priorityScore !== b.priorityScore) {
         return a.priorityScore - b.priorityScore;
       }
-      return (a.timestamp || 0) - (b.timestamp || 0); // Oldest first for same priority
+      return (b.timestamp || 0) - (a.timestamp || 0); // Newest first for same priority
     });
 
     const attentionItems = incidentQueue.filter(r => r.isAttentionRequired);

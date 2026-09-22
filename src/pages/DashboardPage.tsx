@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -41,6 +41,7 @@ const tooltipStyle = {
 };
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const { reports, loadState: reportsLoadState } = useReports();
   const { volunteers, loadState: volunteersLoadState } = useVolunteers();
   const { resources, loadState: resourcesLoadState } = useResources();
@@ -97,30 +98,38 @@ export function DashboardPage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Active Incidents"
-          value={reportsLoadState === 'error' || reportsLoadState === 'permission-denied' ? "Unavailable" : reports.filter(r => isActiveIncident(r.status)).length.toString()}
-          hint={reportsLoadState === 'error' || reportsLoadState === 'permission-denied' ? "Permission Denied" : "total active"}
-          icon={<AlertTriangle className="h-4 w-4" />}
-        />
-        <StatCard
-          label="Volunteers Deployed"
-          value={volunteersLoadState === 'error' || volunteersLoadState === 'permission-denied' ? "Unavailable" : volunteers.filter(v => v.status === "ASSIGNED").length.toString()}
-          hint={volunteersLoadState === 'error' || volunteersLoadState === 'permission-denied' ? "Permission Denied" : `of ${volunteers.length} registered`}
-          icon={<Users className="h-4 w-4" />}
-        />
-        <StatCard
-          label="Resource Readiness"
-          value={resourcesLoadState === 'error' || resourcesLoadState === 'permission-denied' ? "Unavailable" : `${Math.round((resources.filter(r => r.status === "AVAILABLE").length / Math.max(resources.length, 1)) * 100)}%`}
-          hint={resourcesLoadState === 'error' || resourcesLoadState === 'permission-denied' ? "Permission Denied" : "fleet availability"}
-          icon={<Package className="h-4 w-4" />}
-        />
-        <StatCard
-          label="Funds Available"
-          value={financeLoadState === 'error' || financeLoadState === 'permission-denied' ? "Unavailable" : currency(fundsAvailable)}
-          hint={financeLoadState === 'error' || financeLoadState === 'permission-denied' ? "Permission Denied" : `across ${funds.length} funds`}
-          icon={<Banknote className="h-4 w-4" />}
-        />
+        <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/incidents')}>
+          <StatCard
+            label="Active Incidents"
+            value={reportsLoadState === 'error' || reportsLoadState === 'permission-denied' ? "Unavailable" : reports.filter(r => isActiveIncident(r.status)).length.toString()}
+            hint={reportsLoadState === 'error' || reportsLoadState === 'permission-denied' ? "Permission Denied" : "total active"}
+            icon={<AlertTriangle className="h-4 w-4" />}
+          />
+        </div>
+        <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/volunteers')}>
+          <StatCard
+            label="Volunteers Deployed"
+            value={volunteersLoadState === 'error' || volunteersLoadState === 'permission-denied' ? "Unavailable" : volunteers.filter(v => v.status === "ASSIGNED").length.toString()}
+            hint={volunteersLoadState === 'error' || volunteersLoadState === 'permission-denied' ? "Permission Denied" : `of ${volunteers.length} registered`}
+            icon={<Users className="h-4 w-4" />}
+          />
+        </div>
+        <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/resources')}>
+          <StatCard
+            label="Resource Readiness"
+            value={resourcesLoadState === 'error' || resourcesLoadState === 'permission-denied' ? "Unavailable" : `${Math.round((resources.filter(r => r.status === "AVAILABLE").length / Math.max(resources.length, 1)) * 100)}%`}
+            hint={resourcesLoadState === 'error' || resourcesLoadState === 'permission-denied' ? "Permission Denied" : "fleet availability"}
+            icon={<Package className="h-4 w-4" />}
+          />
+        </div>
+        <div className="cursor-pointer transition-transform hover:scale-[1.02]" onClick={() => navigate('/funds')}>
+          <StatCard
+            label="Funds Available"
+            value={financeLoadState === 'error' || financeLoadState === 'permission-denied' ? "Unavailable" : currency(fundsAvailable)}
+            hint={financeLoadState === 'error' || financeLoadState === 'permission-denied' ? "Permission Denied" : `across ${funds.length} funds`}
+            icon={<Banknote className="h-4 w-4" />}
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -213,7 +222,7 @@ export function DashboardPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {intel.incidentQueue.filter(r => r.status !== 'RESOLVED').slice(0, 5).map((i) => (
-                  <tr key={i.reportId}>
+                  <tr key={i.reportId} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/incidents/${i.reportId}`)}>
                     <td className="py-2.5 font-mono text-xs text-muted-foreground">{i.reportId.slice(0, 8)}</td>
                     <td className="py-2.5 font-medium">{i.title || i.incidentType || 'Unknown'}</td>
                     <td className="py-2.5 text-muted-foreground">{i.latitude ? `${i.latitude}, ${i.longitude}` : "Unknown"}</td>
@@ -247,7 +256,14 @@ export function DashboardPage() {
             ) : (
               <ul className="space-y-3">
                 {activities.slice(0, 5).map((activity) => (
-                  <li key={activity.id} className="flex gap-3 text-sm">
+                  <li 
+                    key={activity.id} 
+                    className={`flex gap-3 text-sm ${activity.metadata?.reportId || activity.metadata?.incidentId ? "cursor-pointer hover:bg-muted/50 p-1 -m-1 rounded-md" : ""}`}
+                    onClick={() => {
+                      const id = activity.metadata?.reportId || activity.metadata?.incidentId;
+                      if (id) navigate(`/incidents/${id}`);
+                    }}
+                  >
                     <span className="mt-1 font-mono text-xs text-muted-foreground">{activity.timestamp ? new Date(activity.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : '—'}</span>
                     <div className="min-w-0">
                       <p className="leading-snug">{activity.metadata?.description || activity.type.replace(/_/g, " ")}</p>
@@ -265,7 +281,11 @@ export function DashboardPage() {
         <Panel title="Resource Availability" description="Critical assets on hand" className="lg:col-span-1">
           <ul className="space-y-3">
             {resources.slice(0, 5).map((r) => (
-              <li key={r.id}>
+              <li 
+                key={r.id}
+                className="cursor-pointer hover:bg-muted/50 p-2 -mx-2 rounded-md"
+                onClick={() => navigate(`/resources?resourceId=${r.id}`)}
+              >
                 <div className="flex items-center justify-between text-sm">
                   <span className="truncate">{r.name}</span>
                   <span className="tabular-nums text-muted-foreground">
@@ -283,13 +303,13 @@ export function DashboardPage() {
         <Panel title="Fund Utilisation" description="Spent against allocation" className="lg:col-span-2">
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={funds.map((f) => ({ name: (f.purpose || f.fundId).split(" ")[0], allocated: f.allocatedAmount || 0, spent: f.utilizedAmount || 0 }))}>
+              <BarChart data={funds.map((f) => ({ fundId: f.fundId, name: (f.purpose || f.fundId).split(" ")[0], allocated: f.allocatedAmount || 0, spent: f.utilizedAmount || 0 }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
                 <XAxis dataKey="name" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={50} tickFormatter={(v) => `${v / 1000}k`} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => currency(v as number)} />
-                <Bar dataKey="allocated" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="spent" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => currency(v as number)} cursor={{fill: 'var(--color-muted)', opacity: 0.2}} />
+                <Bar dataKey="allocated" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} className="cursor-pointer hover:opacity-80" onClick={(data: any) => { if (data?.fundId) navigate(`/funds?fundId=${data.fundId}`); }} />
+                <Bar dataKey="spent" fill="var(--color-chart-1)" radius={[4, 4, 0, 0]} className="cursor-pointer hover:opacity-80" onClick={(data: any) => { if (data?.fundId) navigate(`/funds?fundId=${data.fundId}`); }} />
               </BarChart>
             </ResponsiveContainer>
           </div>

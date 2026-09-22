@@ -34,7 +34,7 @@ const NAV = [
     group: 'Operations',
     items: [
       { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
-      { to: '/map', label: 'Live Map', icon: Map },
+      { to: '/live-map', label: 'Live Map', icon: Map },
       { to: '/volunteers', label: 'Volunteers', icon: Users },
       { to: '/resources', label: 'Resources', icon: Package },
     ],
@@ -67,6 +67,10 @@ export function DashboardLayout(_props: DashboardLayoutProps): React.ReactElemen
   const { user, loading, isAuthority, authError } = useAuth();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   if (!isFirebaseConfigured()) {
     return (
@@ -148,16 +152,15 @@ export function DashboardLayout(_props: DashboardLayoutProps): React.ReactElemen
             </p>
             <ul className="space-y-0.5">
               {group.items.map((item) => {
-                const active = location.pathname === item.to || location.pathname.startsWith(item.to + '/');
                 const Icon = item.icon;
                 return (
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
-                      className={cn(
+                      className={({ isActive }) => cn(
                         'flex items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
-                        active
-                          ? 'bg-primary/15 font-medium text-primary'
+                        (isActive || location.pathname.startsWith(item.to + '/'))
+                          ? 'bg-emerald-500/15 font-medium text-emerald-500'
                           : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-foreground',
                       )}
                     >
@@ -209,7 +212,7 @@ export function DashboardLayout(_props: DashboardLayoutProps): React.ReactElemen
             >
               <Menu className="h-4 w-4" />
             </button>
-            <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-destructive/40 bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
+            <span className="inline-flex shrink-0 items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-500">
               <span className="relative inline-block h-1.5 w-1.5 rounded-full bg-current pulse-dot" />
               RSQ Authority — Live
             </span>

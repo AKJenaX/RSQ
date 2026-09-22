@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PackagePlus } from "lucide-react";
 import {
   Bar,
@@ -25,6 +26,18 @@ export function ResourcesPage() {
   const { resources, loadState } = useResources();
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [showResourceModal, setShowResourceModal] = useState(false);
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const resourceId = searchParams.get('resourceId');
+    if (resourceId && loadState === 'success') {
+      const resource = resources.find(r => r.id === resourceId);
+      if (resource) {
+        setEditingResource(resource);
+        setShowResourceModal(true);
+      }
+    }
+  }, [searchParams, resources, loadState]);
 
   const closeResourceModal = () => {
     setShowResourceModal(false);

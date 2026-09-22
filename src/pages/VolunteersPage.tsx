@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Search, UserPlus } from "lucide-react";
 import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
 import { useVolunteers } from "../hooks/useVolunteers";
@@ -16,8 +17,20 @@ export function VolunteersPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [showVolunteerModal, setShowVolunteerModal] = useState(false);
+  const [searchParams] = useSearchParams();
+  const volunteerId = searchParams.get('volunteerId');
 
   const { volunteers, loadState } = useVolunteers();
+
+  useEffect(() => {
+    if (volunteerId && loadState === 'success') {
+      const el = document.getElementById(`volunteer-${volunteerId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [volunteerId, loadState, volunteers]);
+
   const rows = useMemo(
     () =>
       volunteers.filter(
@@ -101,7 +114,7 @@ export function VolunteersPage() {
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((v) => (
-                  <tr key={v.id} className="hover:bg-accent/40">
+                  <tr key={v.id} id={`volunteer-${v.id}`} className={`hover:bg-accent/40 transition-colors ${volunteerId === v.id ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}>
                     <td className="py-3">
                       <div className="flex min-w-0 items-center gap-2.5">
                         <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">

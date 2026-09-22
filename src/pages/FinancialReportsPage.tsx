@@ -14,7 +14,8 @@ import { useFinance } from "../hooks/useFinance";
 import { useAuth } from '../hooks/useAuth';
 import { generateFinancialReport } from '../services/financeService';
 import { formatTimestamp } from '../utils/formatters';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from "react-router-dom";
 
 const currency = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
@@ -30,6 +31,17 @@ export function FinancialReportsPage() {
   const { user } = useAuth();
   const [generating, setGenerating] = useState(false);
   const [period, setPeriod] = useState('Current Month');
+  const [searchParams] = useSearchParams();
+  const reportId = searchParams.get('reportId');
+
+  useEffect(() => {
+    if (reportId && financialReports.length > 0) {
+      const el = document.getElementById(`report-${reportId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [reportId, financialReports]);
   
   const totalAllocated = funds.reduce((acc, f) => acc + (f.allocatedAmount || 0), 0);
   const totalUtilized = funds.reduce((acc, f) => acc + (f.utilizedAmount || 0), 0);
@@ -139,7 +151,7 @@ export function FinancialReportsPage() {
                   </tr>
                 ) : (
                   financialReports.map(report => (
-                    <tr key={report.id} className="hover:bg-accent/40 transition-colors">
+                    <tr key={report.id} id={`report-${report.id}`} className={`hover:bg-accent/40 transition-colors ${reportId === report.id ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}>
                       <td className="py-3 font-mono text-xs text-muted-foreground">{report.reportId}</td>
                       <td className="py-3 font-medium">{report.name}</td>
                       <td className="py-3 text-muted-foreground">{report.period}</td>

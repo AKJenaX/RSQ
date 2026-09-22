@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Plus } from "lucide-react";
 import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
@@ -21,6 +22,17 @@ export function FundsPage() {
   const [showFundModal, setShowFundModal] = useState(false);
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [expandedAllocationId, setExpandedAllocationId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const fundId = searchParams.get('fundId');
+
+  useEffect(() => {
+    if (fundId && loadState === 'success') {
+      const el = document.getElementById(`fund-${fundId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [fundId, loadState, funds]);
 
   const totalBudget = funds.reduce((acc, f) => acc + (f.totalAmount || 0), 0);
   const totalAllocated = funds.reduce((s, f) => s + (f.allocatedAmount || 0), 0);
@@ -98,7 +110,7 @@ export function FundsPage() {
               const allocatedPct = Math.round(((f.allocatedAmount || 0) / (f.totalAmount || 1)) * 100);
               const utilizedPct = Math.round(((f.utilizedAmount || 0) / (f.allocatedAmount || 1)) * 100);
               return (
-                <li key={f.fundId} className="rounded-md border border-border p-4">
+                <li key={f.fundId} id={`fund-${f.fundId}`} className={`rounded-md border p-4 transition-colors ${fundId === f.fundId ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border'}`}>
                   <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{f.purpose || f.fundId}</p>

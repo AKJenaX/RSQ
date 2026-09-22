@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -47,6 +48,20 @@ export function DonationsPage() {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("All");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const donationId = searchParams.get('donationId');
+
+  useEffect(() => {
+    if (donationId && loadState === 'success') {
+      setExpandedId(donationId);
+      setTimeout(() => {
+        const el = document.getElementById(`donation-${donationId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }, [donationId, loadState]);
   
   const rows = useMemo(
     () =>
@@ -143,13 +158,14 @@ export function DonationsPage() {
                 <th className="pb-2 text-right font-medium">Amount</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map((d) => (
-                <React.Fragment key={d.donationId}>
-                  <tr 
-                    className="hover:bg-accent/40 cursor-pointer transition-colors"
-                    onClick={() => setExpandedId(expandedId === d.donationId ? null : d.donationId)}
-                  >
+              <tbody className="divide-y divide-border">
+                {rows.map((d) => (
+                  <React.Fragment key={d.donationId}>
+                    <tr 
+                      id={`donation-${d.donationId}`}
+                      className={`cursor-pointer hover:bg-accent/40 transition-colors ${expandedId === d.donationId ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}
+                      onClick={() => setExpandedId(expandedId === d.donationId ? null : d.donationId)}
+                    >
                     <td className="py-3 font-mono text-xs text-muted-foreground">{d.donationId}</td>
                     <td className="py-3 font-medium">{d.donorName || d.donorType}</td>
                     <td className="py-3 text-muted-foreground">{d.donationType}</td>

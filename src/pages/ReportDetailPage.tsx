@@ -11,6 +11,7 @@ import { AssignVolunteerModal } from "../components/Modals/AssignVolunteerModal"
 import { AssignResourceModal } from "../components/Modals/AssignResourceModal";
 import { ChangeStatusModal } from "../components/Modals/ChangeStatusModal";
 import { ResolveIncidentModal } from "../components/Modals/ResolveIncidentModal";
+import { ImageLightbox } from "../components/media/ImageLightbox";
 import type { DisasterReport } from "../types/report";
 
 const getReportMediaUrls = (report: DisasterReport): string[] => {
@@ -36,6 +37,7 @@ export function ReportDetailPage() {
 
   // Modal states
   const [activeModal, setActiveModal] = useState<'volunteer' | 'resource' | 'status' | 'resolve' | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -83,8 +85,8 @@ export function ReportDetailPage() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <PageHeader
-          title={"Incident " + report.reportId}
-          subtitle={report.title || 'Untitled Incident'}
+          title={report.title || 'Untitled Incident'}
+          subtitle={"Incident ID: " + report.reportId}
           actions={
             <div className="flex gap-2">
               <StatusBadge label={report.status || 'OPEN'} />
@@ -116,15 +118,22 @@ export function ReportDetailPage() {
               {mediaUrls.length > 0 ? (
                 <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                   {mediaUrls.map((url, i) => (
-                    <img 
+                    <button 
                       key={i} 
-                      src={url} 
-                      alt={`Report media ${i + 1}`} 
-                      className="rounded-md w-full h-48 object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><rect width="100%" height="100%" fill="%23222"/><text x="50%" y="50%" fill="%23888" font-family="sans-serif" font-size="14" text-anchor="middle" dy=".3em">Media unavailable</text></svg>';
-                      }}
-                    />
+                      onClick={() => setLightboxIndex(i)}
+                      className="rounded-md w-full h-48 overflow-hidden relative group"
+                      aria-label={`View image ${i + 1}`}
+                    >
+                      <img 
+                        src={url} 
+                        alt={`Report media ${i + 1}`} 
+                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><rect width="100%" height="100%" fill="%23222"/><text x="50%" y="50%" fill="%23888" font-family="sans-serif" font-size="14" text-anchor="middle" dy=".3em">Media unavailable</text></svg>';
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -210,7 +219,17 @@ export function ReportDetailPage() {
       {activeModal === 'volunteer' && <AssignVolunteerModal reportId={report.reportId} authorityUid={user?.uid || ""} onSuccess={() => setActiveModal(null)} onClose={() => setActiveModal(null)} />}
       {activeModal === 'resource' && <AssignResourceModal reportId={report.reportId} authorityUid={user?.uid || ""} onSuccess={() => setActiveModal(null)} onClose={() => setActiveModal(null)} />}
       {activeModal === 'status' && <ChangeStatusModal reportId={report.reportId} currentStatus={report.status || "OPEN"} authorityUid={user?.uid || ""} onSuccess={() => setActiveModal(null)} onClose={() => setActiveModal(null)} />}
-      {activeModal === 'resolve' && <ResolveIncidentModal reportId={report.reportId} authorityUid={user?.uid || ""} onSuccess={() => setActiveModal(null)} onClose={() => setActiveModal(null)} />}
+      {activeModal === 'resolve' && (
+        <ResolveIncidentModal reportId={report.reportId} authorityUid={user?.uid || ""} onSuccess={() => setActiveModal(null)} onClose={() => setActiveModal(null)} />
+      )}
+
+      {lightboxIndex !== null && (
+        <ImageLightbox 
+          images={mediaUrls} 
+          initialIndex={lightboxIndex} 
+          onClose={() => setLightboxIndex(null)} 
+        />
+      )}
     </div>
   );
 }
