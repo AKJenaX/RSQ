@@ -1,8 +1,10 @@
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Search, UserPlus } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
 import { useVolunteers } from "../hooks/useVolunteers";
+import { useReports } from "../hooks/useReports";
 import { VolunteerModal } from '../components/Modals/VolunteerModal';
 
 const mapStatus = (s: string) => {
@@ -20,7 +22,10 @@ export function VolunteersPage() {
   const [searchParams] = useSearchParams();
   const volunteerId = searchParams.get('volunteerId');
 
-  const { volunteers, loadState } = useVolunteers();
+  const { volunteers, loadState: volunteersLoadState } = useVolunteers();
+  const { reports } = useReports();
+  
+  const loadState = volunteersLoadState;
 
   useEffect(() => {
     if (volunteerId && loadState === 'success') {
@@ -108,6 +113,7 @@ export function VolunteersPage() {
                   <th className="pb-2 font-medium">Skill</th>
                   <th className="pb-2 font-medium">Zone</th>
                   <th className="pb-2 font-medium">Status</th>
+                  <th className="pb-2 font-medium">Assigned Report</th>
                   <th className="pb-2 font-medium">Hours</th>
                   <th className="pb-2 font-medium">Contact</th>
                 </tr>
@@ -129,13 +135,31 @@ export function VolunteersPage() {
                     <td className="py-3 text-muted-foreground">{v.role || "Not specified"}</td>
                     <td className="py-3 text-muted-foreground">{typeof v.latitude === 'number' && typeof v.longitude === 'number' ? `${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)}` : "Unknown"}</td>
                     <td className="py-3"><StatusBadge label={v.status} /></td>
+                    <td className="py-3">
+                      {(() => {
+                        const activeReport = reports.find(r => r.status !== 'RESOLVED' && r.assignedVolunteerId === v.id);
+                        if (activeReport) {
+                          const identifier = activeReport.title || `Incident ${activeReport.reportId}`;
+                          return (
+                            <Link 
+                              to={`/reports/${activeReport.reportId}`}
+                              className="text-primary hover:underline hover:text-primary/80 font-medium truncate max-w-[200px] block"
+                              title={identifier}
+                            >
+                              {identifier}
+                            </Link>
+                          );
+                        }
+                        return <span className="text-muted-foreground italic">None</span>;
+                      })()}
+                    </td>
                     <td className="py-3 tabular-nums text-muted-foreground">0</td>
                     <td className="py-3 font-mono text-xs text-muted-foreground">{v.contact || "Not specified"}</td>
                   </tr>
                 ))}
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                    <td colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
                       No volunteers match these filters.
                     </td>
                   </tr>

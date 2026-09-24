@@ -11,7 +11,9 @@ import {
   YAxis,
 } from "recharts";
 import { PageHeader, Panel, StatCard, StatusBadge, Bar as MiniBar } from "../components/ui-kit";
+import { Link } from "react-router-dom";
 import { useResources } from "../hooks/useResources";
+import { useReports } from "../hooks/useReports";
 import { ResourceModal } from "../components/Modals/ResourceModal";
 import type { Resource } from "../types/incident";
 
@@ -23,9 +25,12 @@ const tooltipStyle = {
 };
 
 export function ResourcesPage() {
-  const { resources, loadState } = useResources();
+  const { resources, loadState: resourcesLoadState } = useResources();
+  const { reports } = useReports();
   const [editingResource, setEditingResource] = useState<Resource | null>(null);
   const [showResourceModal, setShowResourceModal] = useState(false);
+  
+  const loadState = resourcesLoadState;
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -93,6 +98,7 @@ export function ResourcesPage() {
                   <th className="pb-2 font-medium">Availability</th>
                   <th className="pb-2 font-medium">On Hand</th>
                   <th className="pb-2 font-medium">Condition</th>
+                  <th className="pb-2 font-medium">Assigned Report</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -111,6 +117,31 @@ export function ResourcesPage() {
                         <span className="text-muted-foreground"> / {total}</span>
                       </td>
                       <td className="py-3"><StatusBadge label={r.status} /></td>
+                      <td className="py-3" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const activeReports = reports.filter(rep => rep.status !== 'RESOLVED' && rep.assignedResourceIds && rep.assignedResourceIds.includes(r.id));
+                          if (activeReports.length > 0) {
+                            return (
+                              <div className="flex flex-col gap-1">
+                                {activeReports.map(activeReport => {
+                                  const identifier = activeReport.title || `Incident ${activeReport.reportId}`;
+                                  return (
+                                    <Link 
+                                      key={activeReport.reportId}
+                                      to={`/reports/${activeReport.reportId}`}
+                                      className="text-primary hover:underline hover:text-primary/80 font-medium truncate max-w-[200px] block"
+                                      title={identifier}
+                                    >
+                                      {identifier}
+                                    </Link>
+                                  );
+                                })}
+                              </div>
+                            );
+                          }
+                          return <span className="text-muted-foreground italic">None</span>;
+                        })()}
+                      </td>
                     </tr>
                   );
                 })}

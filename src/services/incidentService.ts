@@ -159,11 +159,29 @@ export async function resolveIncident(reportId: string, authorityUid: string, re
   const activityRef = getActivityRef(reportId);
 
   await runTransaction(db, async (transaction) => {
+    // 1. ALL READS
     const reportDoc = await transaction.get(reportRef);
     if (!reportDoc.exists()) throw new Error("Incident not found");
 
     const reportData = reportDoc.data();
+    
+    let volDoc: any = null;
+    let volRef: any = null;
+    if (reportData.assignedVolunteerId) {
+      volRef = doc(db, VOLUNTEERS_COLLECTION, reportData.assignedVolunteerId);
+      volDoc = await transaction.get(volRef);
+    }
 
+    const resourceDocs = [];
+    if (reportData.assignedResourceIds && Array.isArray(reportData.assignedResourceIds)) {
+      for (const resId of reportData.assignedResourceIds) {
+        const resRef = doc(db, RESOURCES_COLLECTION, resId);
+        const resDoc = await transaction.get(resRef);
+        resourceDocs.push({ resRef, resDoc, resId });
+      }
+    }
+
+    // 2. ALL WRITES
     transaction.update(reportRef, {
       status: 'RESOLVED',
       resolvedAt: serverTimestamp(),
@@ -172,37 +190,28 @@ export async function resolveIncident(reportId: string, authorityUid: string, re
     });
 
     // Release volunteer
-    if (reportData.assignedVolunteerId) {
-      const volRef = doc(db, VOLUNTEERS_COLLECTION, reportData.assignedVolunteerId);
-      const volDoc = await transaction.get(volRef);
-      if (volDoc.exists() && volDoc.data().status === 'ASSIGNED') {
-        transaction.update(volRef, { status: 'AVAILABLE' });
-        const volActivityRef = doc(collection(db, REPORTS_COLLECTION, reportId, 'activity'));
-        transaction.set(volActivityRef, {
-          type: 'VOLUNTEER_RELEASED',
-          timestamp: serverTimestamp(),
-          performedBy: authorityUid,
-          metadata: { volunteerId: reportData.assignedVolunteerId }
-        });
-      }
+    if (volDoc && volRef && volDoc.exists() && volDoc.data().status === 'ASSIGNED') {
+      transaction.update(volRef, { status: 'AVAILABLE' });
+      const volActivityRef = doc(collection(db, REPORTS_COLLECTION, reportId, 'activity'));
+      transaction.set(volActivityRef, {
+        type: 'VOLUNTEER_RELEASED',
+        timestamp: serverTimestamp(),
+        performedBy: authorityUid,
+        metadata: { volunteerId: reportData.assignedVolunteerId }
+      });
     }
 
     // Release resources
-    if (reportData.assignedResourceIds && Array.isArray(reportData.assignedResourceIds)) {
-      for (const resId of reportData.assignedResourceIds) {
-        const resRef = doc(db, RESOURCES_COLLECTION, resId);
-        const resDoc = await transaction.get(resRef);
-        // Only release if they are assigned or in use
-        if (resDoc.exists() && (resDoc.data().status === 'ASSIGNED' || resDoc.data().status === 'IN_USE')) {
-          transaction.update(resRef, { status: 'AVAILABLE' });
-          const resActivityRef = doc(collection(db, REPORTS_COLLECTION, reportId, 'activity'));
-          transaction.set(resActivityRef, {
-            type: 'RESOURCE_RELEASED',
-            timestamp: serverTimestamp(),
-            performedBy: authorityUid,
-            metadata: { resourceId: resId }
-          });
-        }
+    for (const { resRef, resDoc, resId } of resourceDocs) {
+      if (resDoc.exists() && (resDoc.data().status === 'ASSIGNED' || resDoc.data().status === 'IN_USE')) {
+        transaction.update(resRef, { status: 'AVAILABLE' });
+        const resActivityRef = doc(collection(db, REPORTS_COLLECTION, reportId, 'activity'));
+        transaction.set(resActivityRef, {
+          type: 'RESOURCE_RELEASED',
+          timestamp: serverTimestamp(),
+          performedBy: authorityUid,
+          metadata: { resourceId: resId }
+        });
       }
     }
 
