@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { Search, UserPlus } from "lucide-react";
-import { Link } from "react-router-dom";
+
+
 import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
 import { useVolunteers } from "../hooks/useVolunteers";
 import { useReports } from "../hooks/useReports";
@@ -19,8 +20,12 @@ export function VolunteersPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
   const [showVolunteerModal, setShowVolunteerModal] = useState(false);
+  const [editingVolunteer, setEditingVolunteer] = useState<any>(null);
+
+
   const [searchParams] = useSearchParams();
   const volunteerId = searchParams.get('volunteerId');
+  const navigate = useNavigate();
 
   const { volunteers, loadState: volunteersLoadState } = useVolunteers();
   const { reports } = useReports();
@@ -52,14 +57,13 @@ export function VolunteersPage() {
     return acc;
   }, {} as Record<string, number>);
   const rolesArr = Object.entries(rolesMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-
   return (
     <>
       <PageHeader
         title="Volunteer Roster"
         subtitle={`${volunteers.length} registered - ${volunteers.filter(v => v.status === "ASSIGNED").length} currently deployed`}
         actions={
-          <button onClick={() => setShowVolunteerModal(true)} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
+          <button onClick={() => { setEditingVolunteer(null); setShowVolunteerModal(true); }} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
             <UserPlus className="h-4 w-4" /> Register volunteer
           </button>
         }
@@ -109,54 +113,69 @@ export function VolunteersPage() {
             <table className="w-full min-w-[700px] text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="pb-2 font-medium">Volunteer</th>
-                  <th className="pb-2 font-medium">Skill</th>
-                  <th className="pb-2 font-medium">Zone</th>
-                  <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Assigned Report</th>
-                  <th className="pb-2 font-medium">Hours</th>
-                  <th className="pb-2 font-medium">Contact</th>
+                                                                        <th className="pb-2 font-medium w-[24%]">Volunteer</th>
+                  <th className="pb-2 font-medium w-[15%]">Skill</th>
+                  <th className="pb-2 font-medium w-[14%]">Zone</th>
+                  <th className="pb-2 font-medium w-[14%]">Status</th>
+                  <th className="pb-2 font-medium w-[18%]">Assigned Report</th>
+                  <th className="pb-2 font-medium w-[6%]">Hours</th>
+                  <th className="pb-2 font-medium w-[9%] text-right">Contact</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {rows.map((v) => (
-                  <tr key={v.id} id={`volunteer-${v.id}`} className={`hover:bg-accent/40 transition-colors ${volunteerId === v.id ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}>
-                    <td className="py-3">
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">
-                          {(v.name || "?").split(" ").map((n) => n[0]).join("")}
-                        </span>
+                {rows.map((v) => {
+                  const activeReport = reports.find(r => r.status !== 'RESOLVED' && r.assignedVolunteerId === v.id);
+                  const isClickable = !!activeReport;
+                  return (
+                    <tr 
+                      key={v.id} 
+                      id={`volunteer-${v.id}`} 
+                      className={`${isClickable ? 'cursor-pointer hover:bg-muted/50' : 'hover:bg-accent/40'} transition-colors ${volunteerId === v.id ? 'bg-primary/5 ring-1 ring-inset ring-primary' : ''}`}
+                      onClick={() => {
+                        if (activeReport) {
+                          navigate(`/reports/${activeReport.reportId}`);
+                        } else {
+                          setEditingVolunteer(v);
+                          setShowVolunteerModal(true);
+                        }
+                      }}
+                    >
+                      <td className="py-3">
                         <div className="min-w-0">
                           <p className="truncate font-medium">{v.name}</p>
                           <p className="font-mono text-[11px] text-muted-foreground">{v.id}</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 text-muted-foreground">{v.role || "Not specified"}</td>
-                    <td className="py-3 text-muted-foreground">{typeof v.latitude === 'number' && typeof v.longitude === 'number' ? `${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)}` : "Unknown"}</td>
-                    <td className="py-3"><StatusBadge label={v.status} /></td>
-                    <td className="py-3">
-                      {(() => {
-                        const activeReport = reports.find(r => r.status !== 'RESOLVED' && r.assignedVolunteerId === v.id);
-                        if (activeReport) {
-                          const identifier = activeReport.title || `Incident ${activeReport.reportId}`;
-                          return (
-                            <Link 
-                              to={`/reports/${activeReport.reportId}`}
-                              className="text-primary hover:underline hover:text-primary/80 font-medium truncate max-w-[200px] block"
-                              title={identifier}
-                            >
-                              {identifier}
-                            </Link>
-                          );
-                        }
-                        return <span className="text-muted-foreground italic">None</span>;
-                      })()}
-                    </td>
-                    <td className="py-3 tabular-nums text-muted-foreground">0</td>
-                    <td className="py-3 font-mono text-xs text-muted-foreground">{v.contact || "Not specified"}</td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-3 text-muted-foreground">{v.role || "Not specified"}</td>
+                      <td className="py-3 text-muted-foreground">{typeof v.latitude === 'number' && typeof v.longitude === 'number' ? `${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)}` : "Not specified"}</td>
+                      <td className="py-3"><StatusBadge label={v.status} /></td>
+                      <td className="py-3">
+                        {(() => {
+                          if (activeReport) {
+                            const identifier = activeReport.title || `Incident ${activeReport.reportId}`;
+                            return (
+                              <Link 
+                                to={`/reports/${activeReport.reportId}`}
+                                onClick={(e) => e.stopPropagation()} className="group inline-flex flex-col hover:bg-muted/50 p-1.5 -ml-1.5 rounded transition-colors min-w-0"
+                                title={identifier}
+                              >
+                                <span className="font-medium text-foreground group-hover:text-primary transition-colors truncate max-w-[140px]">
+                                  {activeReport.title || activeReport.incidentType || 'Unknown'}
+                                </span>
+                                <span className="font-mono text-[10px] text-muted-foreground">
+                                  {activeReport.reportId.slice(0, 8)}
+                                </span>
+                              </Link>
+                            );
+                          }
+                          return <span className="text-muted-foreground italic">None</span>;
+                        })()}
+                      </td>
+                      <td className="py-3 tabular-nums text-muted-foreground">0</td>
+                      <td className="py-3 font-mono text-xs text-muted-foreground text-right">{v.contact || "Not specified"}</td>
+                    </tr>
+                  );
+                })}
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
@@ -200,7 +219,9 @@ export function VolunteersPage() {
           </Panel>
         </div>
       </div>
-      {showVolunteerModal ? <VolunteerModal onClose={() => setShowVolunteerModal(false)} /> : null}
+      {showVolunteerModal ? <VolunteerModal volunteer={editingVolunteer} onClose={() => { setShowVolunteerModal(false); setEditingVolunteer(null); }} /> : null}
+
+      
     </>
   );
 }

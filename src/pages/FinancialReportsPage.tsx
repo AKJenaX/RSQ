@@ -16,6 +16,8 @@ import { generateFinancialReport } from '../services/financeService';
 import { formatTimestamp } from '../utils/formatters';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from "react-router-dom";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 const currency = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
@@ -35,6 +37,14 @@ export function FinancialReportsPage() {
   const reportId = searchParams.get('reportId');
 
   useEffect(() => {
+    if (!reportId) {
+      window.scrollTo(0, 0);
+      const timer = setTimeout(() => window.scrollTo(0, 0), 10);
+      return () => clearTimeout(timer);
+    }
+  }, [reportId]);
+
+  useEffect(() => {
     if (reportId && financialReports.length > 0) {
       const el = document.getElementById(`report-${reportId}`);
       if (el) {
@@ -43,29 +53,101 @@ export function FinancialReportsPage() {
     }
   }, [reportId, financialReports]);
   
-  const totalAllocated = funds.reduce((acc, f) => acc + (f.allocatedAmount || 0), 0);
-  const totalUtilized = funds.reduce((acc, f) => acc + (f.utilizedAmount || 0), 0);
+  const isDaily = period === 'Current Month' || period === 'Previous Month';
+  let chartLength = 6;
+  let monthOffset = 0;
+  if (period === 'Current Month') { chartLength = 1; monthOffset = 0; }
+  else if (period === 'Previous Month') { chartLength = 1; monthOffset = 1; }
+  else if (period === 'Last 3 Months') { chartLength = 3; monthOffset = 0; }
+  else if (period === 'Last 6 Months') { chartLength = 6; monthOffset = 0; }
 
-  const realFinanceTrend = Array.from({ length: 6 }).map((_, i) => {
+  let realFinanceTrend: any[] = [];
+
+  if (isDaily) {
     const d = new Date();
-    d.setMonth(d.getMonth() - (5 - i));
-    const monthStr = d.toLocaleDateString("en-US", { month: "short" });
-    const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    d.setMonth(d.getMonth() - monthOffset);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    
+    const now = new Date();
+    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+    const endDay = isCurrentMonth ? now.getDate() : new Date(year, month + 1, 0).getDate();
+    
+    for (let day = 1; day <= endDay; day++) {
+      const dayStart = new Date(year, month, day).getTime();
+      let dayEnd = new Date(year, month, day, 23, 59, 59, 999).getTime();
+      
+      if (isCurrentMonth && day === endDay) {
+        dayEnd = now.getTime();
+      }
 
-    const monthDonations = donations
-      .filter(d => ['VERIFIED', 'ALLOCATED', 'COMPLETED'].includes(d.status) && d.createdAt >= monthStart && d.createdAt <= monthEnd)
-      .reduce((acc, d) => acc + (d.amount || 0), 0);
+      const dayDonations = donations
+        .filter(d => ['VERIFIED', 'ALLOCATED', 'COMPLETED'].includes(d.status) && d.createdAt && d.createdAt >= dayStart && d.createdAt <= dayEnd)
+        .reduce((acc, d) => acc + (d.amount || 0), 0);
+        
+      const dayExpenses = expenses
+        .filter(e => e.status === 'PAID' && e.paidAt && e.paidAt >= dayStart && e.paidAt <= dayEnd)
+        .reduce((acc, e) => acc + (e.amount || 0), 0);
       
-    const monthExpenses = expenses
-      .filter(e => e.status === 'PAID' && e.paidAt && e.paidAt >= monthStart && e.paidAt <= monthEnd)
-      .reduce((acc, e) => acc + (e.amount || 0), 0);
+      const monthStr = d.toLocaleDateString("en-US", { month: "short" });
+      const label = `${monthStr} ${day}`;
+      const fullDate = new Date(year, month, day).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+      realFinanceTrend.push({
+        label,
+        fullDate,
+        donations: dayDonations,
+        expenses: dayExpenses,
+        monthStart: dayStart,
+        monthEnd: dayEnd
+      });
+    }
+  } else {
+    realFinanceTrend = Array.from({ length: chartLength }).map((_, i) => {
+      const d = new Date();
+      const monthsAgo = (chartLength - 1 - i) + monthOffset;
+      d.setMonth(d.getMonth() - monthsAgo);
       
-    return { month: monthStr, donations: monthDonations, expenses: monthExpenses };
-  });
+      const monthStr = d.toLocaleDateString("en-US", { month: "short" });
+      const monthStart = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+      
+      let monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+      const now = new Date();
+      if (d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
+        monthEnd = now.getTime();
+      }
+
+      const monthDonations = donations
+        .filter(d => ['VERIFIED', 'ALLOCATED', 'COMPLETED'].includes(d.status) && d.createdAt && d.createdAt >= monthStart && d.createdAt <= monthEnd)
+        .reduce((acc, d) => acc + (d.amount || 0), 0);
+        
+      const monthExpenses = expenses
+        .filter(e => e.status === 'PAID' && e.paidAt && e.paidAt >= monthStart && e.paidAt <= monthEnd)
+        .reduce((acc, e) => acc + (e.amount || 0), 0);
+      
+      const fullDate = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+        
+      return { 
+        label: monthStr, 
+        fullDate,
+        donations: monthDonations, 
+        expenses: monthExpenses, 
+        monthStart, 
+        monthEnd 
+      };
+    });
+  }
 
   const income = realFinanceTrend.reduce((s, m) => s + m.donations, 0);
   const spend = realFinanceTrend.reduce((s, m) => s + m.expenses, 0);
+
+  const globalStart = realFinanceTrend[0]?.monthStart || 0;
+  const globalEnd = realFinanceTrend[realFinanceTrend.length - 1]?.monthEnd || new Date().getTime();
+
+  const filteredFunds = funds.filter(f => f.createdAt && f.createdAt >= globalStart && f.createdAt <= globalEnd);
+  const totalAllocated = filteredFunds.reduce((acc, f) => acc + (f.allocatedAmount || 0), 0);
+  const totalUtilized = filteredFunds.reduce((acc, f) => acc + (f.utilizedAmount || 0), 0);
+
 
   return (
     <>
@@ -88,15 +170,64 @@ export function FinancialReportsPage() {
                 allocated: totalAllocated,
                 expenditure: spend,
                 netPosition: income - spend,
-                fundCount: funds.length,
-                fundBalances: funds.map(f => ({
+                fundCount: filteredFunds.length,
+                fundBalances: filteredFunds.map(f => ({
                   fundId: f.fundId || f.id || '',
                   purpose: f.purpose || '',
                   available: (f.allocatedAmount || 0) - (f.utilizedAmount || 0)
                 }))
               };
-              try { await generateFinancialReport(`RSQ Financial Report - ${period}`, period, user.uid, snapshot); } catch (e) { console.error(e); }
-              setGenerating(false);
+              
+              try {
+                // 1. Generate PDF
+                const doc = new jsPDF();
+                
+                // Header
+                doc.setFontSize(20);
+                doc.text("RSQ Authority", 14, 22);
+                doc.setFontSize(14);
+                doc.text("Financial Report", 14, 30);
+                
+                // Meta
+                doc.setFontSize(10);
+                doc.text(`Selected Period: ${period}`, 14, 40);
+                doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 45);
+                
+                // KPIs
+                const progRatio = Math.round((totalUtilized / Math.max(totalAllocated, 1)) * 100);
+                doc.setFontSize(12);
+                doc.text(`Total Income: ${currency(income)}`, 14, 55);
+                doc.text(`Total Expenditure: ${currency(spend)}`, 14, 62);
+                doc.text(`Net Position: ${currency(income - spend)}`, 14, 69);
+                doc.text(`Programme Ratio: ${progRatio}%`, 14, 76);
+                
+                // Table Data
+                const tableBody = realFinanceTrend.map(t => [
+                  t.fullDate || t.label,
+                  currency(t.donations),
+                  currency(t.expenses)
+                ]);
+                
+                autoTable(doc, {
+                  startY: 85,
+                  head: [['Date / Period', 'Income', 'Expenditure']],
+                  body: tableBody,
+                  theme: 'striped',
+                  headStyles: { fillColor: [15, 23, 42] }
+                });
+                
+                const filename = `RSQ-Financial-Report-${period.replace(/\s+/g, '-')}.pdf`;
+                doc.save(filename);
+                
+                // 2. Create Firestore Record
+                await generateFinancialReport(`RSQ Financial Report - ${period}`, period, user.uid, snapshot);
+                
+              } catch (e) {
+                console.error("Report generation failed:", e);
+                alert("Failed to generate report. Please try again.");
+              } finally {
+                setGenerating(false);
+              }
             }} disabled={generating} className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50">
               <FileText className="h-4 w-4" /> {generating ? 'Generating...' : 'Generate report'}
             </button>
@@ -106,23 +237,34 @@ export function FinancialReportsPage() {
       {error && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">Financial records could not be loaded from Firestore.</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Income (6 mo)" value={currency(income)} hint="all sources" />
-        <StatCard label="Expenditure (6 mo)" value={currency(spend)} hint="programme spend" />
+        <StatCard label={`Income (${chartLength} mo)`} value={currency(income)} hint="all sources" />
+        <StatCard label={`Expenditure (${chartLength} mo)`} value={currency(spend)} hint="programme spend" />
         <StatCard label="Net Position" value={currency(income - spend)} hint="carried forward" />
         <StatCard label="Programme Ratio" value={`${Math.round((totalUtilized / Math.max(totalAllocated, 1)) * 100)}%`} hint="spend reaching field" />
       </div>
 
-      <Panel title="Income vs Expenditure" description="Rolling six months">
+      <Panel title="Income vs Expenditure" description={period}>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={realFinanceTrend}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-              <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+              <XAxis 
+                dataKey="label" 
+                stroke="var(--color-muted-foreground)" 
+                fontSize={12} 
+                tickLine={false} 
+                axisLine={false} 
+                minTickGap={20}
+              />
               <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={60} tickFormatter={(v) => currency(v as number)} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => currency(v as number)} />
+              <Tooltip 
+                contentStyle={tooltipStyle} 
+                formatter={(v: any) => currency(v as number)}
+                labelFormatter={(_, payload) => payload?.[0]?.payload?.fullDate || ''}
+              />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="donations" stroke="var(--color-chart-3)" strokeWidth={2.5} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="expenses" stroke="var(--color-chart-4)" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="donations" stroke="var(--color-chart-3)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="expenses" stroke="var(--color-chart-4)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>

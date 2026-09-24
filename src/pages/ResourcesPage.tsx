@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { PackagePlus } from "lucide-react";
 import {
   Bar,
@@ -32,6 +32,7 @@ export function ResourcesPage() {
   
   const loadState = resourcesLoadState;
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const resourceId = searchParams.get('resourceId');
@@ -105,10 +106,24 @@ export function ResourcesPage() {
                 {resources.map((r) => {
                   const avail = r.availableUnits ?? (r.status === "AVAILABLE" ? 1 : 0);
                   const total = r.totalUnits ?? 1;
+                  const activeReports = reports.filter(rep => rep.status !== 'RESOLVED' && rep.assignedResourceIds && rep.assignedResourceIds.includes(r.id));
+                  const isClickable = activeReports.length === 1;
+
                   return (
-                    <tr key={r.id} className="cursor-pointer hover:bg-accent/40" onClick={() => { setEditingResource(r); setShowResourceModal(true); }}>
+                    <tr 
+                      key={r.id} 
+                      className={`${isClickable ? 'cursor-pointer hover:bg-muted/50' : 'cursor-pointer hover:bg-accent/40'}`} 
+                      onClick={() => {
+                        if (isClickable) {
+                          navigate(`/reports/${activeReports[0].reportId}`);
+                        } else {
+                          setEditingResource(r); 
+                          setShowResourceModal(true);
+                        }
+                      }}
+                    >
                       <td className="py-3 font-medium">{r.name}</td>
-                      <td className="py-3 text-muted-foreground">{typeof r.latitude === 'number' && typeof r.longitude === 'number' ? `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}` : "Unknown"}</td>
+                      <td className="py-3 text-muted-foreground">{typeof r.latitude === 'number' && typeof r.longitude === 'number' ? `${r.latitude.toFixed(4)}, ${r.longitude.toFixed(4)}` : "Not specified"}</td>
                       <td className="w-40 py-3">
                         <MiniBar value={avail} max={total || 1} />
                       </td>
@@ -117,9 +132,8 @@ export function ResourcesPage() {
                         <span className="text-muted-foreground"> / {total}</span>
                       </td>
                       <td className="py-3"><StatusBadge label={r.status} /></td>
-                      <td className="py-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3">
                         {(() => {
-                          const activeReports = reports.filter(rep => rep.status !== 'RESOLVED' && rep.assignedResourceIds && rep.assignedResourceIds.includes(r.id));
                           if (activeReports.length > 0) {
                             return (
                               <div className="flex flex-col gap-1">
@@ -129,10 +143,16 @@ export function ResourcesPage() {
                                     <Link 
                                       key={activeReport.reportId}
                                       to={`/reports/${activeReport.reportId}`}
-                                      className="text-primary hover:underline hover:text-primary/80 font-medium truncate max-w-[200px] block"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="group inline-flex flex-col hover:bg-muted/50 p-1.5 -ml-1.5 rounded transition-colors w-full"
                                       title={identifier}
                                     >
-                                      {identifier}
+                                      <span className="font-medium text-foreground group-hover:text-primary transition-colors truncate max-w-[180px]">
+                                        {activeReport.title || activeReport.incidentType || 'Unknown'}
+                                      </span>
+                                      <span className="font-mono text-[10px] text-muted-foreground">
+                                        {activeReport.reportId.slice(0, 8)}
+                                      </span>
                                     </Link>
                                   );
                                 })}

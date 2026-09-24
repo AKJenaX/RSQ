@@ -13,7 +13,7 @@ export function PageHeader({
   return (
     <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-border pb-5 sm:flex sm:flex-wrap sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <h1 className="truncate text-2xl font-semibold uppercase tracking-wide sm:text-3xl">
+        <h1 className="text-2xl font-semibold uppercase tracking-wide sm:text-3xl leading-tight">
           {title}
         </h1>
         {subtitle ? (
