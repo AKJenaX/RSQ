@@ -25,7 +25,9 @@ data class AssignmentEntity(
     val updatedAt: Long,
     val volunteerFirebaseUid: String? = null,
     val authorityId: String? = null,
-    val syncState: String = "SYNCED"
+    val syncState: String = "SYNCED",
+    val latitude: Double? = null,
+    val longitude: Double? = null
 ) {
     fun toDomain(): Assignment = Assignment(
         id = id,
@@ -42,7 +44,9 @@ data class AssignmentEntity(
         updatedAt = updatedAt,
         volunteerFirebaseUid = volunteerFirebaseUid,
         authorityId = authorityId,
-        syncState = syncState
+        syncState = syncState,
+        latitude = latitude,
+        longitude = longitude
     )
 
     companion object {
@@ -61,7 +65,9 @@ data class AssignmentEntity(
             updatedAt = domain.updatedAt,
             volunteerFirebaseUid = domain.volunteerFirebaseUid,
             authorityId = domain.authorityId,
-            syncState = domain.syncState
+            syncState = domain.syncState,
+            latitude = domain.latitude,
+            longitude = domain.longitude
         )
     }
 }
@@ -113,7 +119,8 @@ data class NotificationEntity(
     val message: String,
     val timestamp: String,
     val type: String,
-    val isRead: Boolean
+    val isRead: Boolean,
+    val associatedReportId: String? = null
 ) {
     fun toDomain(): Notification = Notification(
         id = id,
@@ -122,7 +129,8 @@ data class NotificationEntity(
         message = message,
         timestamp = timestamp,
         type = NotificationType.valueOf(type),
-        isRead = isRead
+        isRead = isRead,
+        associatedReportId = associatedReportId
     )
 
     companion object {
@@ -133,7 +141,8 @@ data class NotificationEntity(
             message = domain.message,
             timestamp = domain.timestamp,
             type = domain.type.name,
-            isRead = domain.isRead
+            isRead = domain.isRead,
+            associatedReportId = domain.associatedReportId
         )
     }
 }

@@ -23,5 +23,6 @@ data class ReportEntity(
     val syncStatus: SyncStatus,
     val aiScore: Float,
     val detectedHazards: List<String>,
-    val recommendedResources: List<String>
+    val recommendedResources: List<String>,
+    val expirationTimestamp: Long
 )

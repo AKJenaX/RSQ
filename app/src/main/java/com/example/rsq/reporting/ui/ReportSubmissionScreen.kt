@@ -73,6 +73,11 @@ fun ReportSubmissionScreen(
     val nearbyState by nearbyViewModel.nearbyReadiness.collectAsState()
     val reportState by viewModel.reportState.collectAsState()
 
+    val isProcessing = reportState is ReportState.Submitting || 
+                       reportState is ReportState.UploadingEvidence || 
+                       reportState is ReportState.CreatingCloudReport
+    val isFormEnabled = !isProcessing
+
     val title by viewModel.title.collectAsState()
     val description by viewModel.description.collectAsState()
     val selectedImageUris by viewModel.selectedImageUris.collectAsState()
@@ -244,7 +249,7 @@ fun ReportSubmissionScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         shape = MaterialTheme.shapes.medium,
-                        enabled = reportState is ReportState.Idle || reportState is ReportState.Error
+                        enabled = isFormEnabled
                     )
 
                     OutlinedTextField(
@@ -261,7 +266,7 @@ fun ReportSubmissionScreen(
                         shape = MaterialTheme.shapes.medium,
                         singleLine = false,
                         maxLines = 5,
-                        enabled = reportState is ReportState.Idle || reportState is ReportState.Error
+                        enabled = isFormEnabled
                     )
                 }
             }
@@ -322,7 +327,7 @@ fun ReportSubmissionScreen(
                                             .size(28.dp)
                                             .padding(4.dp)
                                             .background(Color.Black.copy(alpha = 0.6f), CircleShape),
-                                        enabled = reportState is ReportState.Idle || reportState is ReportState.Error
+                                        enabled = isFormEnabled
                                     ) {
                                         Icon(
                                             Icons.Default.Close,
@@ -354,7 +359,7 @@ fun ReportSubmissionScreen(
                             },
                             modifier = Modifier.weight(1f),
                             shape = MaterialTheme.shapes.medium,
-                            enabled = selectedImageUris.size < 5 && (reportState is ReportState.Idle || reportState is ReportState.Error)
+                            enabled = selectedImageUris.size < 5 && isFormEnabled
                         ) {
                             Icon(Icons.Default.CameraAlt, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
@@ -365,7 +370,7 @@ fun ReportSubmissionScreen(
                             onClick = { galleryLauncher.launch("image/*") },
                             modifier = Modifier.weight(1f),
                             shape = MaterialTheme.shapes.medium,
-                            enabled = selectedImageUris.size < 5 && (reportState is ReportState.Idle || reportState is ReportState.Error)
+                            enabled = selectedImageUris.size < 5 && isFormEnabled
                         ) {
                             Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
@@ -389,7 +394,6 @@ fun ReportSubmissionScreen(
             val hasLocation = locationState.latitude != null && locationState.longitude != null
             val isLocationReliable = locationState.readiness == LocationReadiness.READY
             val canSubmit = hasLocation && isLocationReliable
-            val isProcessing = reportState !is ReportState.Idle && reportState !is ReportState.Error && reportState !is ReportState.Success && reportState !is ReportState.PendingSync
             
             Button(
                 onClick = {

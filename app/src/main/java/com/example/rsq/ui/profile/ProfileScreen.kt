@@ -21,11 +21,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.rsq.R
 import com.example.rsq.auth.viewmodel.AuthViewModel
+import com.example.rsq.data.repository.SettingsRepository
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     viewModel: AuthViewModel,
+    settingsRepository: SettingsRepository,
     onBack: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToAssignments: () -> Unit,
@@ -34,6 +36,7 @@ fun ProfileScreen(
     onLogout: () -> Unit
 ) {
     val userProfile by viewModel.currentUserProfile.collectAsState()
+    var showSettingsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -136,6 +139,12 @@ fun ProfileScreen(
                 onClick = onNavigateToMeshTest
             )
 
+            ProfileActionButton(
+                icon = Icons.Default.Settings,
+                label = "App Settings",
+                onClick = { showSettingsDialog = true }
+            )
+
             Spacer(modifier = Modifier.height(48.dp))
 
             // Logout
@@ -150,6 +159,48 @@ fun ProfileScreen(
                 Text(stringResource(R.string.logout_session), fontWeight = FontWeight.Bold)
             }
         }
+    }
+
+    if (showSettingsDialog) {
+        val currentRadius by settingsRepository.visibilityRadiusKm.collectAsState()
+        val currentDuration by settingsRepository.visibilityDurationHours.collectAsState()
+        
+        var tempRadius by remember { mutableStateOf(currentRadius.toFloat()) }
+        var tempDuration by remember { mutableStateOf(currentDuration.toFloat()) }
+
+        AlertDialog(
+            onDismissRequest = { showSettingsDialog = false },
+            title = { Text("App Settings", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("Visibility Radius: ${tempRadius.toInt()} km", style = MaterialTheme.typography.labelLarge)
+                    Slider(
+                        value = tempRadius,
+                        onValueChange = { tempRadius = it },
+                        valueRange = 5f..100f,
+                        steps = 19
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Text("Report Duration: ${tempDuration.toInt()} hrs", style = MaterialTheme.typography.labelLarge)
+                    Slider(
+                        value = tempDuration,
+                        onValueChange = { tempDuration = it },
+                        valueRange = 1f..72f,
+                        steps = 71
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    settingsRepository.setVisibilityRadiusKm(tempRadius.toInt())
+                    settingsRepository.setVisibilityDurationHours(tempDuration.toInt())
+                    showSettingsDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSettingsDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 

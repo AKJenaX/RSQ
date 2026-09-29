@@ -9,14 +9,18 @@ import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.model.SyncStatus
 import com.example.rsq.storage.data.StorageRepository
-import com.google.firebase.auth.FirebaseAuth
+import com.example.rsq.data.repository.NotificationRepository
+import com.example.rsq.data.model.Notification
+import com.example.rsq.data.model.NotificationType
+import java.util.UUID
 import java.io.File
 
 class ReportSyncManager(
     private val context: Context,
     private val localRepository: LocalReportRepository,
     private val cloudRepository: ReportRepository,
-    private val storageRepository: StorageRepository
+    private val storageRepository: StorageRepository,
+    private val notificationRepository: NotificationRepository? = null
 ) {
     private val TAG = "RSQ_IMAGE_SYNC"
 
@@ -47,17 +51,17 @@ class ReportSyncManager(
     suspend fun syncReport(reportId: String, onProgress: ((SyncProgress) -> Unit)? = null): Result<Unit> {
         Log.i(TAG, "REPORT_SYNC_START: reportId=$reportId")
 
-        val authUid = FirebaseAuth.getInstance().currentUser?.uid
-        if (authUid == null) {
-            Log.e(TAG, "REPORT_SYNC_FAILED: reportId=$reportId, reason=No Authenticated User")
-            return Result.failure(Exception("Not authenticated"))
-        }
-
         val entity = localRepository.getReportById(reportId)
             ?: run {
                 Log.e(TAG, "REPORT_SYNC_FAILED: reportId=$reportId, reason=Local record missing")
                 return Result.failure(Exception("Report not found"))
             }
+
+        val authUid = entity.userId
+        if (authUid.isBlank()) {
+            Log.e(TAG, "REPORT_SYNC_FAILED: reportId=$reportId, reason=No Authenticated User")
+            return Result.failure(Exception("Not authenticated"))
+        }
 
         Log.d(TAG, "REPORT_SYNC_PROCESSING: ID=$reportId, LocalPathsCount=${entity.localImagePaths.size}")
         localRepository.updateSyncStatus(reportId, SyncStatus.SYNCING)
@@ -120,7 +124,8 @@ class ReportSyncManager(
                 isOffline = entity.isOffline,
                 aiScore = entity.aiScore,
                 detectedHazards = entity.detectedHazards,
-                recommendedResources = entity.recommendedResources
+                recommendedResources = entity.recommendedResources,
+                expirationTimestamp = entity.expirationTimestamp
             )
 
             Log.i(TAG, "FIRESTORE_WRITE_START: $reportId, imageUrlsCount=${currentImageUrls.size}")
@@ -139,6 +144,22 @@ class ReportSyncManager(
                         if (file.delete()) Log.d(TAG, "Cleanup: Deleted $path")
                     }
                 }
+                
+                // Feature 1: Notification for successful offline sync
+                val uid = entity.userId
+                if (uid.isNotBlank() && entity.isOffline) {
+                    notificationRepository?.addNotification(Notification(
+                        id = UUID.randomUUID().toString(),
+                        recipientId = uid,
+                        title = "Report Synced",
+                        message = "Offline report ${entity.title} successfully synced to cloud.",
+                        timestamp = "Just now",
+                        type = NotificationType.SOS_ALERT,
+                        isRead = false,
+                        associatedReportId = reportId
+                    ))
+                }
+
                 return Result.success(Unit)
             } else {
                 val error = cloudResult.exceptionOrNull()

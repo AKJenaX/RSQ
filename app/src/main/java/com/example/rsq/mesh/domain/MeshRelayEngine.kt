@@ -75,7 +75,15 @@ class MeshRelayEngine(
         // 1. Emit RECEIVED event
         emitEvent(message, "RECEIVED", localNodeId, null)
 
-        // 2. Check for duplicates
+        // 2. Reject expired messages before duplicate check, persistence, or relay
+        val currentTime = System.currentTimeMillis()
+        if (message.expirationTimestamp > 0L && message.expirationTimestamp <= currentTime) {
+            emitEvent(message, "EXPIRED_DISCARDED", localNodeId, null)
+            logDebug("Expired message discarded: ${message.id}")
+            return
+        }
+
+        // 3. Check for duplicates
         if (repository.hasMessage(message.id)) {
             emitEvent(message, "DUPLICATE_DISCARDED", localNodeId, null)
 

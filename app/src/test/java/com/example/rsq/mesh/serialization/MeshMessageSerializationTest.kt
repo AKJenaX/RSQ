@@ -97,6 +97,53 @@ class MeshMessageSerializationTest {
         }
     }
 
+    @Test
+    fun `Decode a mesh message containing an unknown JSON field without throwing a serialization exception`() {
+        // Simulates an older RSQ client using `ignoreUnknownKeys = true` decoding a message from a newer app version.
+        val meshJson = Json { ignoreUnknownKeys = true }
+        val jsonWithUnknownField = """
+            {
+                "id": "msg-123",
+                "senderNodeId": "node-a",
+                "originNodeId": "node-origin",
+                "messageType": "SOS",
+                "timestamp": 1625097600000,
+                "latitude": 12.3456,
+                "longitude": 78.9012,
+                "priority": "HIGH",
+                "payload": "Help",
+                "ttl": 3,
+                "future_unknown_field": "some_value"
+            }
+        """.trimIndent()
+        
+        val deserialized = meshJson.decodeFromString<MeshMessage>(jsonWithUnknownField)
+        assertEquals("msg-123", deserialized.id)
+    }
+
+    @Test
+    fun `Decode a legacy mesh message that does not contain expirationTimestamp`() {
+        val meshJson = Json { ignoreUnknownKeys = true }
+        val legacyJson = """
+            {
+                "id": "msg-legacy",
+                "senderNodeId": "node-a",
+                "originNodeId": "node-origin",
+                "messageType": "SOS",
+                "timestamp": 1625097600000,
+                "latitude": 12.3456,
+                "longitude": 78.9012,
+                "priority": "HIGH",
+                "payload": "Help",
+                "ttl": 3
+            }
+        """.trimIndent()
+        
+        val deserialized = meshJson.decodeFromString<MeshMessage>(legacyJson)
+        assertEquals("msg-legacy", deserialized.id)
+        assertEquals(1625097600000L + 24 * 60 * 60 * 1000L, deserialized.expirationTimestamp)
+    }
+
     @Test(expected = Exception::class)
     fun `Malformed JSON should throw exception during deserialization`() {
         val malformedJson = "{ \"id\": \"msg-1\", \"invalid_field\": true }"

@@ -105,6 +105,8 @@ class NearbyMeshTransport(
         private const val TAG = "NearbyMeshTransport"
         private const val RSQ_NEARBY_SERVICE_ID = "com.example.rsq.MESH_SERVICE"
         private val STRATEGY = Strategy.P2P_CLUSTER
+        
+        private val meshJson = Json { ignoreUnknownKeys = true }
     }
 
     override fun start() {
@@ -318,7 +320,7 @@ class NearbyMeshTransport(
                 message
             }
 
-            val json = Json.encodeToString(finalMessage)
+            val json = meshJson.encodeToString(MeshMessage.serializer(), finalMessage)
             val bytesPayload = Payload.fromBytes(json.toByteArray(Charsets.UTF_8))
 
             // Phase 1: Send report metadata (BYTES payload)
@@ -571,7 +573,7 @@ class NearbyMeshTransport(
                     val json = String(bytes, Charsets.UTF_8)
 
                     try {
-                        val message = Json.decodeFromString<MeshMessage>(json)
+                        val message = meshJson.decodeFromString<MeshMessage>(json)
                         validateMessage(message)
 
                         Log.i(TAG, "MESH_MESSAGE_DECODED: reportId=${message.id}, originNodeId=${message.originNodeId}, mediaItems=${message.mediaItems.size}")

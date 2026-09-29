@@ -17,7 +17,10 @@ class AuthorityRepositoryImpl(
 
     private val _reports = if (localReportRepository != null) {
         localReportRepository.observeAllReports().map { reports ->
-            reports.map { it.toRecentReport() }
+            val currentTime = System.currentTimeMillis()
+            reports
+                .filter { it.expirationTimestamp == 0L || it.expirationTimestamp > currentTime }
+                .map { it.toRecentReport() }
         }
     } else {
         flowOf(emptyList())
@@ -61,7 +64,9 @@ class AuthorityRepositoryImpl(
             },
             status = status.name,
             priority = priority,
-            timestamp = timestamp
+            timestamp = timestamp,
+            latitude = latitude,
+            longitude = longitude
         )
     }
 }

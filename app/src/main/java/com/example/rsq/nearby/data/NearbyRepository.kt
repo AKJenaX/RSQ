@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.example.rsq.mesh.domain.MeshTransport
 import com.example.rsq.mesh.model.MeshTransportStatus
+import com.example.rsq.mesh.service.MeshForegroundService
 import com.example.rsq.nearby.model.NearbyReadiness
 import com.example.rsq.nearby.model.NearbyState
 import com.example.rsq.util.BluetoothStateHelper
@@ -78,7 +79,7 @@ class NearbyRepository(
 
         // Initial check and trigger start if possible
         if (hasNearbyPermissions() && isBluetoothEnabled()) {
-             meshTransport.start()
+             MeshForegroundService.startService(context)
         } else {
             val hasPermission = hasNearbyPermissions()
             val isEnabled = isBluetoothEnabled()
@@ -93,21 +94,21 @@ class NearbyRepository(
         }
 
         awaitClose {
-            Log.d(TAG, "NEARBY_ACQUISITION_STOPPED")
+            Log.d(TAG, "NEARBY_ACQUISITION_STOPPED (Leaving Mesh running in background)")
             diagnosticsJob.cancel()
-            meshTransport.stop()
+            // Do NOT stop mesh here, let the foreground service maintain it
         }
     }
 
     fun startDetection() {
         Log.d(TAG, "NEARBY_DETECTION_START_REQUESTED")
         if (hasNearbyPermissions() && isBluetoothEnabled()) {
-            meshTransport.start()
+            MeshForegroundService.startService(context)
         }
     }
 
     fun stopDetection() {
         Log.d(TAG, "NEARBY_DETECTION_STOP_REQUESTED")
-        meshTransport.stop()
+        MeshForegroundService.stopService(context)
     }
 }

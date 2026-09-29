@@ -26,6 +26,18 @@ class NotificationRepositoryImpl(
         notificationDao.insertNotification(NotificationEntity.fromDomain(notification))
     }
 
+    override suspend fun addNotificationUnique(notification: Notification): Boolean {
+        val reportId = notification.associatedReportId
+        if (!reportId.isNullOrBlank()) {
+            val existing = notificationDao.getNotificationForReport(reportId, notification.recipientId, notification.type.name)
+            if (existing != null) {
+                return false
+            }
+        }
+        val rowId = notificationDao.insertNotificationIgnore(NotificationEntity.fromDomain(notification))
+        return rowId != -1L
+    }
+
     override suspend fun markAllAsRead(recipientId: String) {
         notificationDao.markAllAsRead(recipientId)
     }

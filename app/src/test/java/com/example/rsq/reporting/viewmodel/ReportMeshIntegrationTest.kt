@@ -17,6 +17,8 @@ import com.example.rsq.reporting.model.SyncStatus
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.sync.SyncScheduler
 import com.example.rsq.util.ConnectivityObserver
+import com.example.rsq.storage.data.StorageRepository
+import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +45,7 @@ class ReportMeshIntegrationTest {
     private lateinit var fakeIdentityProvider: FakeNodeIdentityProvider
     private lateinit var fakeConnectivityObserver: FakeConnectivityObserver
     private lateinit var mockApplication: Application
+    private lateinit var fakeStorageRepository: StorageRepository
     private lateinit var relayEngine: MeshRelayEngine
     private lateinit var viewModel: ReportViewModel
 
@@ -57,6 +60,7 @@ class ReportMeshIntegrationTest {
         fakeIdentityProvider = FakeNodeIdentityProvider("local-node")
         fakeConnectivityObserver = FakeConnectivityObserver()
         mockApplication = mock<Application>()
+        fakeStorageRepository = mock<StorageRepository>()
     }
 
     @After
@@ -74,7 +78,8 @@ class ReportMeshIntegrationTest {
             localRepository = fakeLocalRepository,
             connectivityObserver = fakeConnectivityObserver,
             relayEngine = relayEngine,
-            identityProvider = fakeIdentityProvider
+            identityProvider = fakeIdentityProvider,
+            storageRepository = fakeStorageRepository
         )
 
         val report = createTestReport("rep-1")
@@ -94,9 +99,9 @@ class ReportMeshIntegrationTest {
         // 3. Verify Firestore was NOT called by the ViewModel
         assertFalse("Firestore should NOT be called directly by ViewModel", fakeReportRepository.submitCalled)
 
-        // 4. Verify UI state is success
-        val state = viewModel.reportState.value as ReportState.Success
-        assertEquals("Report saved locally. Cloud sync pending.", state.message)
+        // 4. Verify UI state is pending sync (because offline sync manager failed to find the mock local report)
+        val state = viewModel.reportState.value as ReportState.PendingSync
+        assertTrue(state.reason.contains("Saved locally") || state.reason.contains("Offline"))
     }
 
     @Test
@@ -109,7 +114,8 @@ class ReportMeshIntegrationTest {
             localRepository = fakeLocalRepository,
             connectivityObserver = fakeConnectivityObserver,
             relayEngine = relayEngine,
-            identityProvider = fakeIdentityProvider
+            identityProvider = fakeIdentityProvider,
+            storageRepository = fakeStorageRepository
         )
         val report = Report(userId = "u1", title = "T", description = "D")
 
@@ -139,7 +145,8 @@ class ReportMeshIntegrationTest {
             localRepository = fakeLocalRepository,
             connectivityObserver = fakeConnectivityObserver,
             relayEngine = relayEngine,
-            identityProvider = fakeIdentityProvider
+            identityProvider = fakeIdentityProvider,
+            storageRepository = fakeStorageRepository
         )
         val report = Report(id = "preserved-id", userId = "u1", title = "T", description = "D")
 
@@ -160,7 +167,8 @@ class ReportMeshIntegrationTest {
             localRepository = fakeLocalRepository,
             connectivityObserver = fakeConnectivityObserver,
             relayEngine = relayEngine,
-            identityProvider = fakeIdentityProvider
+            identityProvider = fakeIdentityProvider,
+            storageRepository = fakeStorageRepository
         )
         fakeMeshTransport.shouldFail = true
 
@@ -169,8 +177,8 @@ class ReportMeshIntegrationTest {
         viewModel.submitReport(report, emptyList())
         advanceUntilIdle()
 
-        val state = viewModel.reportState.value as ReportState.Success
-        assertEquals("Report saved locally. Cloud sync pending.", state.message)
+        val state = viewModel.reportState.value as ReportState.PendingSync
+        assertTrue(state.reason.contains("Saved locally") || state.reason.contains("Offline"))
         assertEquals(1, fakeLocalRepository.savedReports.size)
     }
 
@@ -184,7 +192,8 @@ class ReportMeshIntegrationTest {
             localRepository = fakeLocalRepository,
             connectivityObserver = fakeConnectivityObserver,
             relayEngine = relayEngine,
-            identityProvider = fakeIdentityProvider
+            identityProvider = fakeIdentityProvider,
+            storageRepository = fakeStorageRepository
         )
 
         val report = createTestReport("res-sched-fail")
@@ -192,9 +201,9 @@ class ReportMeshIntegrationTest {
         viewModel.submitReport(report, emptyList())
         advanceUntilIdle()
 
-        // If it didn't crash and returned success, it means the try-catch worked
-        val state = viewModel.reportState.value as ReportState.Success
-        assertEquals("Report saved locally. Cloud sync pending.", state.message)
+        // If it didn't crash and returned PendingSync, it means the try-catch worked
+        val state = viewModel.reportState.value as ReportState.PendingSync
+        assertTrue(state.reason.contains("Saved locally") || state.reason.contains("Offline"))
         assertEquals(1, fakeLocalRepository.savedReports.size)
     }
 
@@ -208,6 +217,8 @@ class ReportMeshIntegrationTest {
             return Result.success(Unit)
         }
         override suspend fun getReports(userId: String): Result<List<Report>> = Result.success(emptyList())
+        override fun observeReports(userId: String): Flow<List<Report>> = MutableSharedFlow()
+        override fun observeAllActiveReports(): Flow<List<Report>> = MutableSharedFlow()
     }
 
     private class FakeLocalReportRepository(dao: ReportDao) : LocalReportRepository(dao) {

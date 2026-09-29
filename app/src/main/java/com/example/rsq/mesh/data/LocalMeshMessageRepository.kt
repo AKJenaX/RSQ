@@ -46,6 +46,7 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
         editor.putString("${prefix}title", message.title)
         editor.putString("${prefix}description", message.description)
         editor.putString("${prefix}acc", message.accuracy?.toString())
+        editor.putLong("${prefix}exp", message.expirationTimestamp)
 
         editor.apply()
     }
@@ -88,6 +89,13 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
         val title = prefs.getString("${prefix}title", "") ?: ""
         val description = prefs.getString("${prefix}description", "") ?: ""
         val accStr = prefs.getString("${prefix}acc", null)
+        
+        val defaultExp = timestamp + 24 * 60 * 60 * 1000L
+        val exp = if (prefs.contains("${prefix}exp")) {
+            prefs.getLong("${prefix}exp", defaultExp)
+        } else {
+            defaultExp
+        }
 
         return MeshMessage(
             id = id,
@@ -102,7 +110,8 @@ class LocalMeshMessageRepository(context: Context) : MeshMessageRepository {
             ttl = ttl,
             title = title,
             description = description,
-            accuracy = accStr?.toFloatOrNull()
+            accuracy = accStr?.toFloatOrNull(),
+            expirationTimestamp = exp
         )
     }
 

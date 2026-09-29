@@ -7,6 +7,9 @@ import com.example.rsq.reporting.domain.ReportLifecycle
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 open class ReportRepository(
@@ -25,19 +28,32 @@ open class ReportRepository(
 
         Log.i(TAG, "FIRESTORE_REPORT_CREATE_STARTED: reports/${report.id}")
         return try {
+            val docRef = db.collection("reports").document(report.id)
+            
+            // Check if document exists to prevent overwriting status and timestamp with stale mesh data
+            val existingDoc = docRef.get().await()
+            val exists = existingDoc.exists()
+            
             val reportData = mutableMapOf<String, Any?>(
                 "userId" to report.userId,
                 "title" to report.title,
                 "description" to report.description,
                 "severity" to report.severity,
-                "status" to report.status.toFirestoreValue(),
-                "timestamp" to report.timestamp,
                 "latitude" to report.latitude,
                 "longitude" to report.longitude,
                 "aiScore" to report.aiScore,
                 "detectedHazards" to report.detectedHazards,
-                "recommendedResources" to report.recommendedResources
+                "recommendedResources" to report.recommendedResources,
+                "expirationTimestamp" to report.expirationTimestamp
             )
+            
+            if (!exists) {
+                reportData["status"] = report.status.toFirestoreValue()
+                reportData["timestamp"] = report.timestamp
+            }
+
+            // Configurable visibility period: ensure expiration is set if not already present
+            // But we will handle expiration logic below when we get to Feature 4.
             
             // Only include image fields if they are not empty to prevent relays 
             // from accidentally clearing evidence uploaded by the origin node.
@@ -48,10 +64,7 @@ open class ReportRepository(
                  reportData["imageUrl"] = report.imageUrl
             }
 
-            db.collection("reports")
-                .document(report.id)
-                .set(reportData, SetOptions.merge())
-                .await()
+            docRef.set(reportData, SetOptions.merge()).await()
             Log.i(TAG, "FIRESTORE_REPORT_CREATE_SUCCESS: reports/${report.id}")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -72,13 +85,75 @@ open class ReportRepository(
                 val report = doc.toObject(Report::class.java)
                 report?.copy(
                     id = doc.id,
-                    status = ReportStatus.fromString(doc.getString("status") ?: "OPEN")
+                    status = ReportStatus.fromString(doc.getString("status") ?: "OPEN"),
+                    expirationTimestamp = doc.getLong("expirationTimestamp") ?: (report.timestamp + 24 * 60 * 60 * 1000L)
                 )
             }
             Result.success(reports)
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    open fun observeReports(userId: String): Flow<List<Report>> = callbackFlow {
+        if (firestore == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val listener = db.collection("reports")
+            .whereEqualTo("userId", userId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                
+                if (snapshot != null) {
+                    val reports = snapshot.documents.mapNotNull { doc ->
+                        val report = doc.toObject(Report::class.java)
+                        report?.copy(
+                            id = doc.id,
+                            status = ReportStatus.fromString(doc.getString("status") ?: "OPEN"),
+                            expirationTimestamp = doc.getLong("expirationTimestamp") ?: (report.timestamp + 24 * 60 * 60 * 1000L)
+                        )
+                    }
+                    trySend(reports)
+                }
+            }
+        
+        awaitClose { listener.remove() }
+    }
+
+    open fun observeAllActiveReports(): Flow<List<Report>> = callbackFlow {
+        if (firestore == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val listener = db.collection("reports")
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                
+                if (snapshot != null) {
+                    val reports = snapshot.documents.mapNotNull { doc ->
+                        val report = doc.toObject(Report::class.java)
+                        report?.copy(
+                            id = doc.id,
+                            status = ReportStatus.fromString(doc.getString("status") ?: "OPEN"),
+                            expirationTimestamp = doc.getLong("expirationTimestamp") ?: (report.timestamp + 24 * 60 * 60 * 1000L)
+                        )
+                    }
+                    trySend(reports)
+                }
+            }
+        
+        awaitClose { listener.remove() }
     }
 
     open suspend fun updateReportStatus(

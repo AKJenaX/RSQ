@@ -14,5 +14,6 @@ data class Notification(
     val message: String,
     val timestamp: String,
     val type: NotificationType,
-    val isRead: Boolean = false
+    val isRead: Boolean = false,
+    val associatedReportId: String? = null
 )

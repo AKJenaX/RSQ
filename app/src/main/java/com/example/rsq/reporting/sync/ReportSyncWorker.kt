@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import com.example.rsq.reporting.data.LocalReportRepository
 import com.example.rsq.reporting.data.ReportRepository
 import com.example.rsq.reporting.data.local.LocalReportDatabase
+import com.example.rsq.data.repository.NotificationRepositoryImpl
 import com.example.rsq.storage.data.StorageRepository
 
 class ReportSyncWorker(
@@ -21,12 +22,14 @@ class ReportSyncWorker(
         val localRepository = LocalReportRepository(db.reportDao())
         val cloudRepository = ReportRepository()
         val storageRepository = StorageRepository()
+        val notificationRepository = NotificationRepositoryImpl(db.notificationDao())
 
         val syncManager = ReportSyncManager(
             applicationContext,
             localRepository,
             cloudRepository,
-            storageRepository
+            storageRepository,
+            notificationRepository
         )
 
         return try {

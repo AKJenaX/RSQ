@@ -8,5 +8,6 @@ interface NotificationRepository {
     fun getUnreadCount(recipientId: String): Flow<Int>
     suspend fun markAsRead(id: String)
     suspend fun addNotification(notification: Notification)
+    suspend fun addNotificationUnique(notification: Notification): Boolean
     suspend fun markAllAsRead(recipientId: String)
 }

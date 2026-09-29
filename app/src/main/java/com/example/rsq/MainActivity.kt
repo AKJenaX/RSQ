@@ -1,5 +1,6 @@
 package com.example.rsq
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -15,6 +16,7 @@ import androidx.lifecycle.lifecycleScope
 import com.example.rsq.ai.data.SeverityEngine
 import com.example.rsq.ui.navigation.AppNavigation
 import com.example.rsq.ui.theme.RSQTheme
+import com.example.rsq.util.EmergencyNotificationManager
 import com.example.rsq.util.PaymentErrorData
 import com.example.rsq.util.PaymentResultHandler
 import com.example.rsq.util.PaymentSuccessData
@@ -22,11 +24,19 @@ import com.razorpay.Checkout
 import com.razorpay.PaymentData
 import com.razorpay.PaymentResultWithDataListener
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
+
+    private val _pendingReportId = MutableStateFlow<String?>(null)
+    val pendingReportId: StateFlow<String?> = _pendingReportId.asStateFlow()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleNotificationIntent(intent)
         
         // Preload Razorpay Checkout for faster UI rendering
         Checkout.preload(applicationContext)
@@ -80,5 +90,22 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
                 )
             )
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val reportId = intent?.getStringExtra(EmergencyNotificationManager.EXTRA_REPORT_ID)
+        if (!reportId.isNullOrBlank()) {
+            _pendingReportId.value = reportId
+        }
+    }
+
+    fun clearPendingReportId() {
+        _pendingReportId.value = null
     }
 }

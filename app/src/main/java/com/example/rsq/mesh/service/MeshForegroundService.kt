@@ -14,6 +14,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.rsq.MainActivity
 import com.example.rsq.R
+import com.example.rsq.mesh.domain.MeshServiceManager
 
 class MeshForegroundService : Service() {
 
@@ -61,6 +62,7 @@ class MeshForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        MeshServiceManager.initialize(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -73,6 +75,7 @@ class MeshForegroundService : Service() {
                     @Suppress("DEPRECATION")
                     stopForeground(true)
                 }
+                MeshServiceManager.getTransport()?.stop()
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -80,6 +83,7 @@ class MeshForegroundService : Service() {
                 Log.i(TAG, "Starting Mesh Foreground Service")
                 val notification = buildNotification("RSQ Mesh active in background")
                 startForeground(NOTIFICATION_ID, notification)
+                MeshServiceManager.getTransport()?.start()
                 return START_STICKY
             }
         }

@@ -30,7 +30,8 @@ import com.example.rsq.ui.common.ErrorView
 fun NotificationScreen(
     viewModel: NotificationViewModel,
     onBack: () -> Unit,
-    onNavigateToAssignments: () -> Unit = {}
+    onNavigateToAssignments: () -> Unit = {},
+    onNavigateToReportDetail: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -73,6 +74,8 @@ fun NotificationScreen(
                                     viewModel.markAsRead(notification.id)
                                     if (notification.type == NotificationType.ASSIGNMENT_RECEIVED) {
                                         onNavigateToAssignments()
+                                    } else if (!notification.associatedReportId.isNullOrBlank()) {
+                                        onNavigateToReportDetail(notification.associatedReportId)
                                     }
                                 }
                             )

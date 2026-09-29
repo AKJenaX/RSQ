@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +28,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.rsq.MainActivity
 import com.example.rsq.auth.model.AuthState
 import com.example.rsq.auth.ui.EmailVerificationScreen
 import com.example.rsq.auth.ui.ForgotPasswordScreen
@@ -34,7 +36,7 @@ import com.example.rsq.auth.ui.LoginScreen
 import com.example.rsq.auth.ui.RegisterScreen
 import com.example.rsq.auth.viewmodel.AuthViewModel
 import com.example.rsq.mesh.data.LocalMeshMessageRepository
-import com.example.rsq.mesh.data.MeshTransportFactory
+import com.example.rsq.mesh.domain.MeshServiceManager
 import com.example.rsq.mesh.data.NearbyMeshTransport
 import com.example.rsq.mesh.data.NodeIdentityRepository
 import com.example.rsq.mesh.domain.MeshRelayEngine
@@ -106,13 +108,31 @@ fun AppNavigation() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // Handle incoming system notification taps
+    val mainActivity = context as? MainActivity
+    val pendingReportId by mainActivity?.pendingReportId?.collectAsState() ?: remember { mutableStateOf(null) }
+
+    LaunchedEffect(pendingReportId) {
+        pendingReportId?.let { reportId ->
+            navController.navigate(Screen.ReportDetail(reportId).route)
+            mainActivity?.clearPendingReportId()
+        }
+    }
+
     // Connectivity
     val connectivityObserver = remember { NetworkConnectivityObserver(context) }
 
-    // Mesh dependencies
+    // Mesh dependencies initialized in global manager
+    LaunchedEffect(Unit) {
+        MeshServiceManager.initialize(context.applicationContext)
+    }
+    
     val meshIdentityProvider = remember { NodeIdentityRepository(context) }
-    val meshMessageRepository = remember { LocalMeshMessageRepository(context) }
-    val meshTransport = remember { MeshTransportFactory.createTransport(context, meshIdentityProvider) }
+    // Fetch directly from ServiceManager instead of creating dynamically
+    val meshTransport = remember { 
+        MeshServiceManager.initialize(context.applicationContext)
+        MeshServiceManager.getTransport()!! 
+    }
 
     // Local database
     val localReportDatabase = remember { LocalReportDatabase.getDatabase(context) }
@@ -127,6 +147,7 @@ fun AppNavigation() {
     // Global Location Management
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     val locationRepository = remember { LocationRepository(context, fusedLocationClient) }
+    val settingsRepository = remember { SettingsRepository(context) }
     val locationViewModel: LocationViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
@@ -156,14 +177,10 @@ fun AppNavigation() {
         }
     )
 
-    // Lifecycle-aware relay engine
+    // Retrieve global relay engine
     val meshRelayEngine = remember {
-        MeshRelayEngine(
-            transport = meshTransport,
-            repository = meshMessageRepository,
-            identityProvider = meshIdentityProvider,
-            scope = authViewModel.internalScope
-        )
+        MeshServiceManager.initialize(context.applicationContext)
+        MeshServiceManager.getEngine()!!
     }
 
     // Report ViewModel
@@ -178,8 +195,11 @@ fun AppNavigation() {
                     repository = ReportRepository(),
                     localRepository = localReportRepository,
                     connectivityObserver = connectivityObserver,
+                    locationStateFlow = locationViewModel.locationState,
                     relayEngine = meshRelayEngine,
-                    identityProvider = meshIdentityProvider
+                    identityProvider = meshIdentityProvider,
+                    notificationRepository = notificationRepository,
+                    settingsRepository = settingsRepository
                 ) as T
             }
         }
@@ -390,6 +410,7 @@ fun AppNavigation() {
             VictimHomeScreen(
                 onTriggerSOS = { navController.navigate(Screen.ReportSubmission.route) },
                 onViewHistory = { navController.navigate(Screen.ReportHistory.route) },
+                onNavigateToNotifications = { navController.navigate(Screen.Notification.route) },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -397,6 +418,7 @@ fun AppNavigation() {
         composable(Screen.Profile.route) {
             ProfileScreen(
                 viewModel = authViewModel,
+                settingsRepository = settingsRepository,
                 onBack = { navController.popBackStack() },
                 onNavigateToHistory = { navController.navigate(Screen.ReportHistory.route) },
                 onNavigateToAssignments = { navController.navigate(Screen.Assignment.route) },
@@ -635,6 +657,9 @@ fun AppNavigation() {
                     },
                     onNavigateToAssignments = {
                         navController.navigate(Screen.Assignment.route)
+                    },
+                    onNavigateToReportDetail = { reportId ->
+                        navController.navigate(Screen.ReportDetail(reportId).route)
                     }
                 )
             } else {

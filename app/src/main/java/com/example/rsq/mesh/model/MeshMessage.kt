@@ -22,6 +22,7 @@ data class MeshMessage(
     val title: String = "",
     val description: String = "",
     val accuracy: Float? = null,
+    val expirationTimestamp: Long = timestamp + 24 * 60 * 60 * 1000L,
     // Attached evidence media metadata (up to 5 items)
     val mediaItems: List<MeshMediaMetadata> = emptyList()
 )

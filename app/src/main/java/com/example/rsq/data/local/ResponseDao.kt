@@ -77,6 +77,12 @@ interface NotificationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertNotification(notification: NotificationEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertNotificationIgnore(notification: NotificationEntity): Long
+
+    @Query("SELECT * FROM notifications WHERE associatedReportId = :reportId AND recipientId = :recipientId AND type = :type LIMIT 1")
+    suspend fun getNotificationForReport(reportId: String, recipientId: String, type: String): NotificationEntity?
+
     @Query("UPDATE notifications SET isRead = 1 WHERE id = :id")
     suspend fun markAsRead(id: String)
 

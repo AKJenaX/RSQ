@@ -33,7 +33,8 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
             syncStatus = syncStatus,
             aiScore = report.aiScore,
             detectedHazards = report.detectedHazards,
-            recommendedResources = report.recommendedResources
+            recommendedResources = report.recommendedResources,
+            expirationTimestamp = report.expirationTimestamp
         )
         reportDao.insertReport(entity)
         Log.i(TAG, "LOCAL_REPORT_SAVED: ID=${report.id}, SyncStatus=$syncStatus")
@@ -110,7 +111,8 @@ open class LocalReportRepository(private val reportDao: ReportDao) {
             isOffline = isOffline,
             aiScore = aiScore,
             detectedHazards = detectedHazards,
-            recommendedResources = recommendedResources
+            recommendedResources = recommendedResources,
+            expirationTimestamp = expirationTimestamp
         )
     }
 }

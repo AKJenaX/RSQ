@@ -10,6 +10,8 @@ import com.example.rsq.mesh.domain.NodeIdentityProvider
 object MeshTransportFactory {
 
     private const val TAG = "MeshTransportFactory"
+    
+    private var instance: MeshTransport? = null
 
     private fun isEmulator(): Boolean {
         return (Build.FINGERPRINT.startsWith("generic")
@@ -26,12 +28,14 @@ object MeshTransportFactory {
         context: Context,
         identityProvider: NodeIdentityProvider
     ): MeshTransport {
-        return if (BuildConfig.DEBUG && isEmulator()) {
-            Log.i(TAG, "DEBUG build running on Android Emulator. Selecting MockMeshTransport for testing.")
-            MockMeshTransport(identityProvider)
-        } else {
-            Log.i(TAG, "Selecting production NearbyMeshTransport (Google Nearby Connections).")
-            NearbyMeshTransport(context.applicationContext, identityProvider)
+        return instance ?: synchronized(this) {
+            instance ?: if (BuildConfig.DEBUG && isEmulator()) {
+                Log.i(TAG, "DEBUG build running on Android Emulator. Selecting MockMeshTransport for testing.")
+                MockMeshTransport(identityProvider)
+            } else {
+                Log.i(TAG, "Selecting production NearbyMeshTransport (Google Nearby Connections).")
+                NearbyMeshTransport(context.applicationContext, identityProvider)
+            }.also { instance = it }
         }
     }
 }

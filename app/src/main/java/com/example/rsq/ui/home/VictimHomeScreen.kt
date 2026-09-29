@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +28,7 @@ import com.example.rsq.R
 fun VictimHomeScreen(
     onTriggerSOS: () -> Unit,
     onViewHistory: () -> Unit,
+    onNavigateToNotifications: () -> Unit,
     onBack: () -> Unit,
 ) {
     Scaffold(
@@ -41,6 +43,9 @@ fun VictimHomeScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onNavigateToNotifications) {
+                        Icon(imageVector = Icons.Default.Notifications, contentDescription = "Notifications")
+                    }
                     IconButton(onClick = onViewHistory) {
                         Icon(imageVector = Icons.Default.History, contentDescription = "View History")
                     }

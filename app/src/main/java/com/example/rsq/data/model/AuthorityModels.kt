@@ -17,5 +17,7 @@ data class RecentReport(
     val location: String,
     val status: String,
     val priority: Priority,
-    val timestamp: Long
+    val timestamp: Long,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )

@@ -34,11 +34,10 @@ fun ReportDetailScreen(
     viewModel: ReportViewModel,
     onBack: () -> Unit
 ) {
-    val reports by viewModel.reports.collectAsState()
-    val meshReports by viewModel.meshReports.collectAsState()
+    val allEmergencyReports by viewModel.allEmergencyReports.collectAsState()
     
-    val report = remember(reports, meshReports, reportId) {
-        reports.find { it.id == reportId } ?: meshReports.find { it.id == reportId }
+    val report = remember(allEmergencyReports, reportId) {
+        allEmergencyReports.find { it.id == reportId }
     }
     val context = LocalContext.current
 

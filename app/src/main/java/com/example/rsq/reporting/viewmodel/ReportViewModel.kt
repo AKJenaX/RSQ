@@ -3,6 +3,7 @@ package com.example.rsq.reporting.viewmodel
 import android.app.Application
 import android.net.Uri
 import android.util.Log
+import android.location.Location
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.rsq.data.model.Priority
@@ -23,6 +24,12 @@ import com.example.rsq.storage.data.StorageRepository
 import com.example.rsq.ai.data.SeverityEngine
 import com.example.rsq.util.ConnectivityObserver
 import androidx.lifecycle.SavedStateHandle
+import com.example.rsq.data.model.Notification
+import com.example.rsq.data.model.NotificationType
+import com.example.rsq.data.repository.NotificationRepository
+import com.example.rsq.location.model.LocationState
+import com.example.rsq.data.repository.SettingsRepository
+import com.example.rsq.util.EmergencyNotificationManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -34,8 +41,12 @@ class ReportViewModel(
     private val repository: ReportRepository,
     private val localRepository: LocalReportRepository,
     private val connectivityObserver: ConnectivityObserver,
+    private val locationStateFlow: StateFlow<LocationState>? = null,
     private val relayEngine: MeshRelayEngine? = null,
-    private val identityProvider: NodeIdentityProvider? = null
+    private val identityProvider: NodeIdentityProvider? = null,
+    private val notificationRepository: NotificationRepository? = null,
+    private val settingsRepository: SettingsRepository? = null,
+    private val storageRepository: StorageRepository = StorageRepository()
 ) : AndroidViewModel(application) {
 
     private val TAG = "RSQ_IMAGE_SYNC"
@@ -83,15 +94,33 @@ class ReportViewModel(
     private val _reports = MutableStateFlow<List<Report>>(emptyList())
     val reports: StateFlow<List<Report>> = _reports.asStateFlow()
 
-    private val _meshReports = MutableStateFlow<List<Report>>(emptyList())
-    val meshReports: StateFlow<List<Report>> = _meshReports.asStateFlow()
-
     // Combined reports for the responder hub
-    val allEmergencyReports: StateFlow<List<Report>> = combine(_reports, _meshReports) { cloud, mesh ->
+    val allEmergencyReports: StateFlow<List<Report>> = combine(_reports, locationStateFlow ?: MutableStateFlow(
+        LocationState()
+    ), settingsRepository?.visibilityRadiusKm ?: MutableStateFlow(50)) { cloudAndMesh, locState, radiusKm ->
         val reportMap = mutableMapOf<String, Report>()
-        mesh.forEach { reportMap[it.id] = it }
-        cloud.forEach { reportMap[it.id] = it }
-        reportMap.values.sortedByDescending { it.timestamp }
+        val currentTime = System.currentTimeMillis()
+        val visibilityRadiusMeters = radiusKm * 1000.0
+
+        cloudAndMesh.forEach { reportMap[it.id] = it }
+
+        reportMap.values
+            .filter { report -> 
+                // Feature 4: Filter expired (legacy 0 gets fixed in DB, but just to be safe, also handle 0 or very small timestamp if needed)
+                report.expirationTimestamp == 0L || report.expirationTimestamp > currentTime 
+            }
+            .filter { report -> // Feature 3: Distance-based visibility
+                val userLat = locState.latitude
+                val userLon = locState.longitude
+                if (userLat != null && userLon != null && report.latitude != null && report.longitude != null) {
+                    val results = FloatArray(1)
+                    Location.distanceBetween(userLat, userLon, report.latitude, report.longitude, results)
+                    results[0] <= visibilityRadiusMeters
+                } else {
+                    true // If location is missing for either user or report, show it safely
+                }
+            }
+            .sortedByDescending { it.timestamp }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _connectivityStatus = connectivityObserver.observe()
@@ -99,11 +128,25 @@ class ReportViewModel(
     val connectivityStatus: StateFlow<ConnectivityObserver.Status> = _connectivityStatus
 
     init {
-        observeMeshTraffic()
         observeLocalReports()
+        observeCloudReports()
+        
+        // Trigger automatic synchronization when connectivity is restored
+        viewModelScope.launch {
+            connectivityStatus.collect { status ->
+                if (status == ConnectivityObserver.Status.Available) {
+                    SyncScheduler.scheduleSync(getApplication())
+                }
+            }
+        }
     }
 
     fun submitReport(report: Report, imageUris: List<Uri> = emptyList()) {
+        if (_reportState.value is ReportState.Submitting || 
+            _reportState.value is ReportState.UploadingEvidence || 
+            _reportState.value is ReportState.CreatingCloudReport) {
+            return
+        }
         viewModelScope.launch {
             _reportState.value = ReportState.Submitting
             val reportId = if (report.id.isBlank()) UUID.randomUUID().toString() else report.id
@@ -131,12 +174,14 @@ class ReportViewModel(
                     imageUri = aiAnalysisUri
                 )
 
+                val durationHours = settingsRepository?.visibilityDurationHours?.value ?: 24
                 val finalReport = report.copy(
                     id = reportId,
                     severity = aiResult.severity,
                     aiScore = aiResult.finalScore,
                     detectedHazards = aiResult.detectedHazards.map { it.name },
-                    recommendedResources = aiResult.recommendedResources
+                    recommendedResources = aiResult.recommendedResources,
+                    expirationTimestamp = report.timestamp + durationHours * 60L * 60L * 1000L
                 )
 
                 // 3. Persist locally FIRST (Durable Offline-First)
@@ -161,7 +206,8 @@ class ReportViewModel(
                         getApplication(),
                         localRepository,
                         repository,
-                        StorageRepository()
+                        storageRepository,
+                        notificationRepository
                     )
                     
                     val syncResult = syncManager.syncReport(reportId) { progress ->
@@ -214,34 +260,45 @@ class ReportViewModel(
         }
     }
 
+    private fun observeCloudReports() {
+        viewModelScope.launch {
+            repository.observeAllActiveReports().collect { cloudReports ->
+                val currentTime = System.currentTimeMillis()
+                val localUserId = identityProvider?.getNodeId() ?: ""
+                cloudReports.forEach { report ->
+                    val isExpired = report.expirationTimestamp > 0L && report.expirationTimestamp <= currentTime
+                    if (!isExpired) {
+                        localRepository.saveReport(report, emptyList(), SyncStatus.SYNCED)
+
+                        if (localUserId.isNotBlank() && report.userId != localUserId) {
+                            val notif = Notification(
+                                id = "NT_SOS_${report.id}",
+                                recipientId = localUserId,
+                                title = "New Emergency Report",
+                                message = "${report.severity}: ${report.title}",
+                                timestamp = "Just now",
+                                type = NotificationType.SOS_ALERT,
+                                isRead = false,
+                                associatedReportId = report.id
+                            )
+                            val isNewNotif = notificationRepository?.addNotificationUnique(notif) ?: false
+                            if (isNewNotif) {
+                                EmergencyNotificationManager.showSystemNotification(getApplication(), report)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private suspend fun broadcastViaMesh(report: Report, localImagePaths: List<String> = emptyList()): Result<Unit>? {
         val meshMessage = convertToMeshMessage(report)
         val mediaFiles = localImagePaths.map { File(it) }.filter { it.exists() }
         return relayEngine?.broadcastMessage(meshMessage, mediaFiles)
     }
 
-    private fun observeMeshTraffic() {
-        relayEngine?.let { engine ->
-            viewModelScope.launch {
-                engine.processedMessages
-                    .filter { it.messageType == MeshMessageType.REPORT_RELAY || it.messageType == MeshMessageType.SOS }
-                    .collect { meshMsg ->
-                        val report = convertFromMeshMessage(meshMsg)
-                        // Persist mesh-delivered reports to local Room DB
-                        localRepository.saveReport(report, emptyList(), SyncStatus.LOCAL_ONLY)
-                        updateMeshReports(report)
-                    }
-            }
-        }
-    }
 
-    private fun updateMeshReports(report: Report) {
-        val current = _meshReports.value.toMutableList()
-        if (current.none { it.id == report.id }) {
-            current.add(0, report)
-            _meshReports.value = current.take(50) // Keep latest 50
-        }
-    }
 
     private fun convertToMeshMessage(report: Report): MeshMessage {
         val priority = when (report.severity.uppercase()) {
@@ -262,43 +319,63 @@ class ReportViewModel(
             payload = "${report.title}: ${report.description}",
             ttl = 3,
             title = report.title,
-            description = report.description
+            description = report.description,
+            expirationTimestamp = report.expirationTimestamp
         )
     }
 
-    private fun convertFromMeshMessage(msg: MeshMessage): Report {
-        // Prefer explicit fields if available, otherwise fall back to payload parsing
-        val title = if (msg.title.isNotBlank()) msg.title else msg.payload.substringBefore(": ")
-        val description = if (msg.description.isNotBlank()) msg.description else msg.payload.substringAfter(": ")
+    companion object {
+        fun convertFromMeshMessage(msg: MeshMessage): Report {
+            // Prefer explicit fields if available, otherwise fall back to payload parsing
+            val title = if (msg.title.isNotBlank()) msg.title else msg.payload.substringBefore(": ")
+            val description = if (msg.description.isNotBlank()) msg.description else msg.payload.substringAfter(": ")
 
-        return Report(
-            id = msg.id,
-            userId = msg.originNodeId,
-            title = title,
-            description = description,
-            severity = when (msg.priority) {
-                Priority.HIGH -> "HIGH"
-                Priority.MEDIUM -> "MEDIUM"
-                Priority.LOW -> "LOW"
-            },
-            status = ReportStatus.OPEN,
-            timestamp = msg.timestamp,
-            latitude = msg.latitude,
-            longitude = msg.longitude,
-            isOffline = true
-        )
+            return Report(
+                id = msg.id,
+                userId = msg.originNodeId,
+                title = title,
+                description = description,
+                severity = when (msg.priority) {
+                    Priority.HIGH -> "HIGH"
+                    Priority.MEDIUM -> "MEDIUM"
+                    Priority.LOW -> "LOW"
+                },
+                status = ReportStatus.OPEN,
+                timestamp = msg.timestamp,
+                latitude = msg.latitude,
+                longitude = msg.longitude,
+                isOffline = true,
+                expirationTimestamp = msg.expirationTimestamp
+            )
+        }
     }
 
     fun loadReports(userId: String) {
         viewModelScope.launch {
-            val result = repository.getReports(userId)
-            if (result.isSuccess) {
-                _reports.value = result.getOrNull() ?: emptyList()
+            // Feature 1: Notifications for changes in the status of reports submitted by the user.
+            repository.observeReports(userId).collect { cloudReports ->
+                val currentLocal = _reports.value
+                val newStatusReports = cloudReports.filter { cloudReport ->
+                    val local = currentLocal.find { it.id == cloudReport.id }
+                    local != null && local.status != cloudReport.status
+                }
+                
+                _reports.value = cloudReports
                 _reportState.value = ReportState.Idle
-            } else {
-                _reportState.value = ReportState.Error(
-                    result.exceptionOrNull()?.message ?: "Failed to load reports"
-                )
+                
+                newStatusReports.forEach { updatedReport ->
+                    notificationRepository?.addNotification(
+                        Notification(
+                            id = UUID.randomUUID().toString(),
+                            recipientId = userId,
+                            title = "Report Status Updated",
+                            message = "Your report for ${updatedReport.title} is now ${updatedReport.status.name}.",
+                            timestamp = "Just now",
+                            type = NotificationType.SOS_ALERT,
+                            associatedReportId = updatedReport.id
+                        )
+                    )
+                }
             }
         }
     }

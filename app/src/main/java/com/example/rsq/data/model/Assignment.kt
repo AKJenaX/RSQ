@@ -19,5 +19,7 @@ data class Assignment(
     val updatedAt: Long,
     val volunteerFirebaseUid: String? = null,
     val authorityId: String? = null,
-    val syncState: String = "SYNCED"
+    val syncState: String = "SYNCED",
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )

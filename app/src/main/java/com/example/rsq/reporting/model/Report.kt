@@ -15,5 +15,6 @@ data class Report(
     val isOffline: Boolean = false,
     val aiScore: Float = 0f,
     val detectedHazards: List<String> = emptyList(),
-    val recommendedResources: List<String> = emptyList()
+    val recommendedResources: List<String> = emptyList(),
+    val expirationTimestamp: Long = timestamp + 24 * 60 * 60 * 1000L
 )

@@ -110,6 +110,7 @@ class ReportSyncManagerTest {
         syncStatus = status,
         aiScore = 0f,
         detectedHazards = emptyList(),
-        recommendedResources = emptyList()
+        recommendedResources = emptyList(),
+        expirationTimestamp = 0L
     )
 }
