@@ -7,6 +7,7 @@ import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.model.MediaTransferUiState
 import com.example.rsq.mesh.model.MeshMediaMetadata
 import com.example.rsq.reporting.data.LocalReportRepository
+import com.example.rsq.reporting.sync.SyncScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ class PendingMediaRegistry(
 ) {
     companion object {
         private const val TAG = "PendingMediaRegistry"
+        private const val MESH_LOG = "RSQ_MESH_RELAY"
     }
 
     private val _mediaTransfers = MutableStateFlow<List<MediaTransferUiState>>(emptyList())
@@ -138,7 +140,7 @@ class PendingMediaRegistry(
 
     @Synchronized
     fun onFilePayloadCompleted(payloadId: Long, receivedUri: Uri, totalBytes: Long, endpointId: String? = null) {
-        Log.i(TAG, "MEDIA_FILE_COMPLETED: nearbyPayloadId=$payloadId, receivedUri=$receivedUri, size=$totalBytes, endpointId=$endpointId")
+        Log.i(MESH_LOG, "MEDIA_RECEIVED: nearbyPayloadId=$payloadId, uri=$receivedUri, size=$totalBytes")
 
         // 1. Calculate SHA-256 of received content URI via ContentResolver
         val actualSha256 = try {
@@ -178,24 +180,16 @@ class PendingMediaRegistry(
         val distinctMediaCandidates = matchingCandidates.distinctBy { it.mediaId }
 
         Log.i(TAG, "MEDIA_MATCH_DIAGNOSTIC: payloadId=$payloadId, totalBytes=$totalBytes, receivedSha256=$actualSha256, candidatesToEvaluate=${candidatesToEvaluate.size}, matchingChecksums=${matchingCandidates.size}, distinctMediaIds=${distinctMediaCandidates.size}")
-        candidatesToEvaluate.forEachIndexed { idx, candidate ->
-            val persisted = isPersisted(candidate.mediaId)
-            val uiItem = _mediaTransfers.value.find { it.mediaId == candidate.mediaId }
-            Log.i(TAG, "MEDIA_CANDIDATE: candidateIndex=$idx, mediaId=${candidate.mediaId}, reportId=${candidate.reportId}, sizeBytes=${candidate.sizeBytes}, expectedSha256=${candidate.checksum}, isPersisted=$persisted, status=${uiItem?.status ?: "NONE"}")
-        }
 
         when {
             distinctMediaCandidates.size == 1 -> {
                 val matchedMeta = distinctMediaCandidates.first()
                 payloadToMediaMap[payloadId] = matchedMeta.mediaId
-                Log.i(TAG, "MEDIA_MATCH_RESULT: candidates=${candidatesToEvaluate.size}, distinctMediaIds=${distinctMediaCandidates.size}, selectedMediaId=${matchedMeta.mediaId}, result=UNIQUE")
-                Log.i(TAG, "Matched file payload URI to metadata by SHA-256 ($actualSha256): mediaId=${matchedMeta.mediaId}, payloadId=$payloadId")
                 processCompletedTransfer(matchedMeta, receivedUri, payloadId, endpointId)
             }
             distinctMediaCandidates.isEmpty() -> {
                 val unmatchedMeta = candidatesToEvaluate.first()
                 val reason = "No media metadata matched received SHA-256 checksum ($actualSha256)"
-                Log.e(TAG, "MEDIA_MATCH_RESULT: candidates=${candidatesToEvaluate.size}, distinctMediaIds=0, selectedMediaId=NONE, result=NO_MATCH")
                 Log.e(TAG, "MEDIA_CHECKSUM_FAILED: $reason")
                 updateUiState(
                     meta = unmatchedMeta,
@@ -219,14 +213,11 @@ class PendingMediaRegistry(
                 if (unpersistedMatching.size == 1) {
                     val matchedMeta = unpersistedMatching.first()
                     payloadToMediaMap[payloadId] = matchedMeta.mediaId
-                    Log.i(TAG, "MEDIA_MATCH_RESULT: candidates=${candidatesToEvaluate.size}, distinctMediaIds=${distinctMediaCandidates.size}, selectedMediaId=${matchedMeta.mediaId}, result=DISAMBIGUATED_UNPERSISTED")
-                    Log.i(TAG, "Disambiguated candidate by unpersisted status: mediaId=${matchedMeta.mediaId}, payloadId=$payloadId")
                     processCompletedTransfer(matchedMeta, receivedUri, payloadId, endpointId)
                 } else {
                     val ambiguousMeta = distinctMediaCandidates.first()
                     val candidateMediaIds = distinctMediaCandidates.map { it.mediaId }
                     val reason = "Multiple media metadata items ($candidateMediaIds) matched received file checksum ($actualSha256)"
-                    Log.e(TAG, "MEDIA_MATCH_RESULT: candidates=${candidatesToEvaluate.size}, distinctMediaIds=${distinctMediaCandidates.size}, selectedMediaId=AMBIGUOUS, result=AMBIGUOUS")
                     Log.e(TAG, "MEDIA_TRANSFER_FAILED: $reason")
                     updateUiState(
                         meta = ambiguousMeta,
@@ -282,11 +273,13 @@ class PendingMediaRegistry(
                     saved = true,
                     localFilePath = verification.savedFile.absolutePath
                 )
-                emitRelayTrace(meta.reportId, "MEDIA CHECKSUM VERIFIED")
-                emitRelayTrace(meta.reportId, "MEDIA PERSISTED")
+                Log.i(MESH_LOG, "MEDIA_VERIFIED: reportId=${meta.reportId}, mediaId=${meta.mediaId}, sha256=${verification.actualChecksum}")
 
                 localReportRepository.addReceivedMedia(meta.reportId, verification.savedFile.absolutePath)
-                Log.i(TAG, "MEDIA_TRANSFER_COMPLETED: Associated media ${meta.mediaId} with report ${meta.reportId}")
+                Log.i(MESH_LOG, "MEDIA_PERSISTED: reportId=${meta.reportId}, localPath=${verification.savedFile.absolutePath}")
+
+                // Automatically trigger WorkManager cloud sync as soon as evidence is verified & persisted
+                SyncScheduler.scheduleSync(context)
 
                 // Trigger multi-hop media forwarding if the report was relayed
                 relayEngine?.onMediaFileVerified(meta.reportId, meta.mediaId, verification.savedFile)
@@ -307,8 +300,7 @@ class PendingMediaRegistry(
                     saved = false,
                     failureReason = verification.failureReason
                 )
-                emitRelayTrace(meta.reportId, "MEDIA CHECKSUM FAILED")
-                Log.e(TAG, "MEDIA_TRANSFER_FAILED: Verification or save failed for ${meta.mediaId}: ${verification.failureReason}")
+                Log.e(MESH_LOG, "MEDIA_VERIFICATION_FAILED: reportId=${meta.reportId}, mediaId=${meta.mediaId}, reason=${verification.failureReason}")
             }
         }
     }
@@ -348,10 +340,8 @@ class PendingMediaRegistry(
         val index = current.indexOfFirst { it.mediaId == meta.mediaId }
         val existingItem = current.getOrNull(index)
 
-        // TERMINAL STATE REGRESSION GUARD: If this media item is already PERSISTED or FAILED, do NOT allow IN_PROGRESS/RECEIVING to overwrite it!
         if (existingItem != null && (existingItem.status == "PERSISTED" || existingItem.status == "FAILED") &&
             (status == "RECEIVING" || status == "ANNOUNCED" || status == "IN_PROGRESS")) {
-            Log.d(TAG, "PREVENTED_REGRESSION: Media ${meta.mediaId} is already ${existingItem.status}. Ignoring stale $status update.")
             return
         }
 
@@ -383,8 +373,6 @@ class PendingMediaRegistry(
         } else {
             current.add(itemState)
         }
-
-        Log.i(TAG, "STATE_MUTATION: mediaId=${meta.mediaId}, payloadId=${itemState.payloadId}, oldStatus=$oldStatus, newStatus=$status, bytesTransferred=${itemState.bytesTransferred}, actualSizeBytes=${itemState.actualSizeBytes}, sizeMatchStatus=${itemState.sizeMatchStatus}, checksumMatchStatus=${itemState.checksumMatchStatus}, saved=${itemState.saved}")
 
         _mediaTransfers.value = current
     }

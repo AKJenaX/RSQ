@@ -33,6 +33,7 @@ fun ProfileScreen(
     onNavigateToAssignments: () -> Unit,
     onNavigateToNotifications: () -> Unit,
     onNavigateToMeshTest: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val userProfile by viewModel.currentUserProfile.collectAsState()
@@ -131,6 +132,12 @@ fun ProfileScreen(
                 icon = Icons.Default.Notifications,
                 label = stringResource(R.string.alert_notifications),
                 onClick = onNavigateToNotifications
+            )
+
+            ProfileActionButton(
+                icon = Icons.Default.Router,
+                label = "Mesh Diagnostics & Status",
+                onClick = onNavigateToDiagnostics
             )
 
             ProfileActionButton(

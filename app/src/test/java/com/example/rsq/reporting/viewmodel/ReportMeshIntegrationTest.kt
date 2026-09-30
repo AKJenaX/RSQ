@@ -58,7 +58,7 @@ class ReportMeshIntegrationTest {
         fakeMeshTransport = FakeMeshTransport()
         fakeMeshRepository = FakeMeshMessageRepository()
         fakeIdentityProvider = FakeNodeIdentityProvider("local-node")
-        fakeConnectivityObserver = FakeConnectivityObserver()
+        fakeConnectivityObserver = FakeConnectivityObserver(ConnectivityObserver.Status.Unavailable)
         mockApplication = mock<Application>()
         fakeStorageRepository = mock<StorageRepository>()
     }
@@ -69,7 +69,7 @@ class ReportMeshIntegrationTest {
     }
 
     @Test
-    fun `submitting a report should trigger local save and mesh broadcast then return success immediately`() = runTest(testDispatcher) {
+    fun `submitting a report offline should trigger local save and mesh broadcast then return pending sync`() = runTest(testDispatcher) {
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
         viewModel = ReportViewModel(
             application = mockApplication,
@@ -96,12 +96,43 @@ class ReportMeshIntegrationTest {
         assertEquals("rep-1", fakeMeshTransport.sentMessages[0].id)
         assertEquals("local-node", fakeMeshTransport.sentMessages[0].senderNodeId)
 
-        // 3. Verify Firestore was NOT called by the ViewModel
-        assertFalse("Firestore should NOT be called directly by ViewModel", fakeReportRepository.submitCalled)
+        // 3. Verify Firestore was NOT called by the ViewModel when offline
+        assertFalse("Firestore should NOT be called directly by ViewModel when offline", fakeReportRepository.submitCalled)
 
-        // 4. Verify UI state is pending sync (because offline sync manager failed to find the mock local report)
+        // 4. Verify UI state is pending sync
         val state = viewModel.reportState.value as ReportState.PendingSync
         assertTrue(state.reason.contains("Saved locally") || state.reason.contains("Offline"))
+    }
+
+    @Test
+    fun `submitting a report online should trigger direct firestore upload without mesh broadcast`() = runTest(testDispatcher) {
+        val onlineObserver = FakeConnectivityObserver(ConnectivityObserver.Status.Available)
+        relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
+        viewModel = ReportViewModel(
+            application = mockApplication,
+            savedStateHandle = SavedStateHandle(),
+            repository = fakeReportRepository,
+            localRepository = fakeLocalRepository,
+            connectivityObserver = onlineObserver,
+            relayEngine = relayEngine,
+            identityProvider = fakeIdentityProvider,
+            storageRepository = fakeStorageRepository
+        )
+
+        val report = createTestReport("online-rep-100")
+
+        viewModel.submitReport(report, emptyList())
+        advanceUntilIdle()
+
+        // 1. Verify Direct Firestore submission was called
+        assertTrue("Firestore should be called directly when online", fakeReportRepository.submitCalled)
+
+        // 2. Verify Mesh Broadcast was NOT called on online route
+        assertEquals(0, fakeMeshTransport.sentMessages.size)
+
+        // 3. Verify UI state is Success
+        val state = viewModel.reportState.value
+        assertTrue("Online submission should return ReportState.Success", state is ReportState.Success)
     }
 
     @Test
@@ -260,7 +291,9 @@ class ReportMeshIntegrationTest {
         override fun getNodeId(): String = id
     }
 
-    private class FakeConnectivityObserver : ConnectivityObserver {
-        override fun observe(): Flow<ConnectivityObserver.Status> = MutableStateFlow(ConnectivityObserver.Status.Available)
+    private class FakeConnectivityObserver(
+        val status: ConnectivityObserver.Status = ConnectivityObserver.Status.Unavailable
+    ) : ConnectivityObserver {
+        override fun observe(): Flow<ConnectivityObserver.Status> = MutableStateFlow(status)
     }
 }

@@ -50,6 +50,7 @@ import com.example.rsq.reporting.ui.ReportSubmissionScreen
 import com.example.rsq.reporting.ui.screens.ReportDetailScreen
 import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.ui.dashboard.AuthorityDashboardScreen
+import com.example.rsq.ui.diagnostics.MeshDiagnosticsScreen
 import com.example.rsq.ui.viewmodel.*
 import com.example.rsq.ui.donation.DonationScreen
 import com.example.rsq.data.repository.*
@@ -91,6 +92,7 @@ sealed class Screen(val route: String) {
         }
     }
     object MeshTest : Screen("mesh_test")
+    object MeshDiagnostics : Screen("mesh_diagnostics")
 
     object VolunteerDashboard : Screen("volunteer_dashboard")
     object AuthorityDashboard : Screen("authority_dashboard")
@@ -424,6 +426,7 @@ fun AppNavigation() {
                 onNavigateToAssignments = { navController.navigate(Screen.Assignment.route) },
                 onNavigateToNotifications = { navController.navigate(Screen.Notification.route) },
                 onNavigateToMeshTest = { navController.navigate(Screen.MeshTest.route) },
+                onNavigateToDiagnostics = { navController.navigate(Screen.MeshDiagnostics.route) },
                 onLogout = {
                     authViewModel.logout()
                     navController.navigate(Screen.Login.route) {
@@ -512,6 +515,12 @@ fun AppNavigation() {
                 onNavigateBack = {
                     navController.popBackStack()
                 }
+            )
+        }
+
+        composable(Screen.MeshDiagnostics.route) {
+            MeshDiagnosticsScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 

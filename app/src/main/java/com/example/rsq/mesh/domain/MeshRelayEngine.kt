@@ -22,6 +22,8 @@ class MeshRelayEngine(
 ) {
     companion object {
         private const val TAG = "MeshRelayEngine"
+        private const val MESH_LOG = "RSQ_MESH_RELAY"
+        private const val DIAG_LOG = "RSQ_DIAGNOSTIC"
     }
 
     private val _processedMessages = MutableSharedFlow<MeshMessage>()
@@ -72,8 +74,19 @@ class MeshRelayEngine(
     private suspend fun handleIncomingMessage(message: MeshMessage) {
         val localNodeId = identityProvider.getNodeId()
 
+        val originUid = if (message.originUserId.isNotBlank()) message.originUserId else message.originNodeId
+        Log.i(DIAG_LOG, "BOUNDARY_1_MESH_RECEIVED: " +
+            "reportId=${message.id}, " +
+            "originNodeId=${message.originNodeId}, " +
+            "originUserId=$originUid, " +
+            "relayDeviceId=${message.senderNodeId}, " +
+            "relayUserId=N/A, " +
+            "receivedViaRelay=true"
+        )
+
         // 1. Emit RECEIVED event
         emitEvent(message, "RECEIVED", localNodeId, null)
+        Log.i(MESH_LOG, "MESSAGE_RECEIVED: messageId=${message.id}, originNodeId=${message.originNodeId}")
 
         // 2. Reject expired messages before duplicate check, persistence, or relay
         val currentTime = System.currentTimeMillis()
@@ -95,6 +108,7 @@ class MeshRelayEngine(
         logInfo("New mesh message received: ${message.id}")
 
         repository.saveMessage(message)
+        Log.i(MESH_LOG, "REPORT_PERSISTED: messageId=${message.id}")
 
         emitEvent(message, "PERSISTED", localNodeId, null)
 

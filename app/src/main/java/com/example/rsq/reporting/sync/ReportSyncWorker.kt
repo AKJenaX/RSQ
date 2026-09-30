@@ -9,6 +9,7 @@ import com.example.rsq.reporting.data.ReportRepository
 import com.example.rsq.reporting.data.local.LocalReportDatabase
 import com.example.rsq.data.repository.NotificationRepositoryImpl
 import com.example.rsq.storage.data.StorageRepository
+import com.google.firebase.auth.FirebaseAuth
 
 class ReportSyncWorker(
     context: Context,
@@ -16,7 +17,8 @@ class ReportSyncWorker(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        Log.i(TAG, "ReportSyncWorker STARTED")
+        Log.i(TAG, "RSQ_SYNC: ReportSyncWorker ENTERED id=$id runAttemptCount=$runAttemptCount")
+        Log.d(TAG, "RSQ_SYNC: Firebase user=${FirebaseAuth.getInstance().currentUser?.uid ?: "NONE_OR_ANONYMOUS"}")
 
         val db = LocalReportDatabase.getDatabase(applicationContext)
         val localRepository = LocalReportRepository(db.reportDao())
@@ -35,19 +37,30 @@ class ReportSyncWorker(
         return try {
             val result = syncManager.syncPendingReports()
             if (result.isSuccess) {
-                Log.i(TAG, "ReportSyncWorker SUCCEEDED")
+                Log.i(TAG, "RSQ_SYNC: WORKER_RESULT=SUCCESS")
                 Result.success()
             } else {
-                Log.w(TAG, "ReportSyncWorker RETRYING: ${result.exceptionOrNull()?.message}")
-                Result.retry()
+                val exception = result.exceptionOrNull()
+                if (syncManager.isPermanentError(exception)) {
+                    Log.e(TAG, "RSQ_SYNC: WORKER_RESULT=FAILURE reason=${exception?.message}")
+                    Result.failure()
+                } else {
+                    Log.w(TAG, "RSQ_SYNC: WORKER_RESULT=RETRY reason=${exception?.message}")
+                    Result.retry()
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "ReportSyncWorker FAILED with UNEXPECTED ERROR: ${e.message}", e)
-            Result.retry()
+            if (syncManager.isPermanentError(e)) {
+                Log.e(TAG, "RSQ_SYNC: WORKER_RESULT=FAILURE unexpected=${e.message}")
+                Result.failure()
+            } else {
+                Log.w(TAG, "RSQ_SYNC: WORKER_RESULT=RETRY unexpected=${e.message}")
+                Result.retry()
+            }
         }
     }
 
     companion object {
-        private const val TAG = "ReportSyncWorker"
+        private const val TAG = "RSQ_SYNC"
     }
 }

@@ -106,7 +106,6 @@ class ReportViewModel(
 
         reportMap.values
             .filter { report -> 
-                // Feature 4: Filter expired (legacy 0 gets fixed in DB, but just to be safe, also handle 0 or very small timestamp if needed)
                 report.expirationTimestamp == 0L || report.expirationTimestamp > currentTime 
             }
             .filter { report -> // Feature 3: Distance-based visibility
@@ -150,106 +149,164 @@ class ReportViewModel(
         viewModelScope.launch {
             _reportState.value = ReportState.Submitting
             val reportId = if (report.id.isBlank()) UUID.randomUUID().toString() else report.id
-            Log.i(TAG, "REPORT_SUBMIT_START: reportId=$reportId, userId=${report.userId}, imageCount=${imageUris.size}, title=${report.title}")
+            val isOnline = _connectivityStatus.value == ConnectivityObserver.Status.Available
 
-            try {
-                // 1. Copy images to internal storage IMMEDIATELY to prevent URI permission loss
-                val localPaths = mutableListOf<String>()
-                imageUris.forEachIndexed { index, uri ->
-                    Log.i(TAG, "IMAGE_LOCAL_COPY_START: index=$index, URI=$uri")
-                    val path = ImageStorageManager.copyToInternalStorage(getApplication(), uri, index)
-                    if (path != null) {
-                        localPaths.add(path)
-                    } else {
-                        Log.e(TAG, "IMAGE_LOCAL_COPY_FAILED: index=$index - Aborting immediate cloud sync")
-                    }
-                }
+            if (isOnline) {
+                // =========================================================
+                // ROUTE A: DIRECT ONLINE SUBMISSION (ONLINE -> FIREBASE)
+                // =========================================================
+                Log.i("RSQ_ONLINE", "RSQ_ONLINE: ROUTE_SELECTED=DIRECT_ONLINE")
+                Log.i("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_START reportId=$reportId, userId=${report.userId}")
 
-                // 2. Multimodal AI Analysis (using first image if available)
-                val aiAnalysisUri = if (localPaths.isNotEmpty()) Uri.fromFile(java.io.File(localPaths[0])) else null
-
-                val aiResult = SeverityEngine.analyzeMultimodal(
-                    title = report.title,
-                    description = report.description,
-                    imageUri = aiAnalysisUri
-                )
-
-                val durationHours = settingsRepository?.visibilityDurationHours?.value ?: 24
-                val finalReport = report.copy(
-                    id = reportId,
-                    severity = aiResult.severity,
-                    aiScore = aiResult.finalScore,
-                    detectedHazards = aiResult.detectedHazards.map { it.name },
-                    recommendedResources = aiResult.recommendedResources,
-                    expirationTimestamp = report.timestamp + durationHours * 60L * 60L * 1000L
-                )
-
-                // 3. Persist locally FIRST (Durable Offline-First)
-                localRepository.saveReport(finalReport, localPaths, SyncStatus.LOCAL_ONLY)
-                Log.i(TAG, "LOCAL_REPORT_SAVED: ID=$reportId")
-
-                // 4. Mesh broadcast (Resilient offline fallback)
-                viewModelScope.launch {
-                    val result = broadcastViaMesh(finalReport, localPaths)
-                    if (result != null && result.isSuccess) {
-                        Log.i(TAG, "MESH_BROADCAST_SUCCESS: reportId=$reportId")
-                    } else {
-                        val error = result?.exceptionOrNull()?.message ?: "Engine or transport unavailable"
-                        Log.w(TAG, "MESH_BROADCAST_FAILED: reportId=$reportId, reason=$error")
-                    }
-                }
-
-                // 5. Determine communication path based on connectivity
-                if (_connectivityStatus.value == ConnectivityObserver.Status.Available) {
-                    Log.i(TAG, "COMMUNICATION_PATH_SELECTED: ONLINE (Firebase)")
-                    val syncManager = ReportSyncManager(
-                        getApplication(),
-                        localRepository,
-                        repository,
-                        storageRepository,
-                        notificationRepository
-                    )
-                    
-                    val syncResult = syncManager.syncReport(reportId) { progress ->
-                        when (progress) {
-                            ReportSyncManager.SyncProgress.UPLOADING_EVIDENCE ->
-                                _reportState.value = ReportState.UploadingEvidence
-                            ReportSyncManager.SyncProgress.CREATING_CLOUD_REPORT ->
-                                _reportState.value = ReportState.CreatingCloudReport
+                try {
+                    // 1. Copy image URIs to internal storage files
+                    val localPaths = mutableListOf<String>()
+                    imageUris.forEachIndexed { index, uri ->
+                        val path = ImageStorageManager.copyToInternalStorage(getApplication(), uri, index)
+                        if (path != null) {
+                            localPaths.add(path)
                         }
                     }
 
-                    if (syncResult.isSuccess) {
-                        Log.i(TAG, "REPORT_SYNC_SUCCESS: $reportId")
+                    // 2. Multimodal AI Analysis
+                    val aiAnalysisUri = if (localPaths.isNotEmpty()) Uri.fromFile(File(localPaths[0])) else null
+                    val aiResult = SeverityEngine.analyzeMultimodal(
+                        title = report.title,
+                        description = report.description,
+                        imageUri = aiAnalysisUri
+                    )
+
+                    // 3. Upload Images directly to Firebase Storage
+                    Log.i("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_START reportId=$reportId count=${localPaths.size}")
+                    _reportState.value = ReportState.UploadingEvidence
+
+                    val uploadedUrls = mutableListOf<String>()
+                    for (index in localPaths.indices) {
+                        val file = File(localPaths[index])
+                        if (file.exists()) {
+                            val uploadResult = storageRepository.uploadImage(Uri.fromFile(file), reportId, index)
+                            if (uploadResult.isSuccess) {
+                                val downloadUrl = uploadResult.getOrThrow()
+                                uploadedUrls.add(downloadUrl)
+                                Log.i("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_SUCCESS reportId=$reportId index=$index url=$downloadUrl")
+                            } else {
+                                val e = uploadResult.exceptionOrNull()
+                                Log.e("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_FAILED reportId=$reportId index=$index reason=${e?.message}")
+                                _reportState.value = ReportState.Error(e?.message ?: "Image upload failed")
+                                return@launch
+                            }
+                        }
+                    }
+
+                    // 4. Submit Report directly to Cloud Firestore
+                    _reportState.value = ReportState.CreatingCloudReport
+                    val durationHours = settingsRepository?.visibilityDurationHours?.value ?: 24
+                    val finalReport = report.copy(
+                        id = reportId,
+                        severity = aiResult.severity,
+                        aiScore = aiResult.finalScore,
+                        detectedHazards = aiResult.detectedHazards.map { it.name },
+                        recommendedResources = aiResult.recommendedResources,
+                        imageUrl = uploadedUrls.firstOrNull(),
+                        imageUrls = uploadedUrls,
+                        isOffline = false,
+                        expirationTimestamp = report.timestamp + durationHours * 3600 * 1000L,
+                        originUserId = report.effectiveOriginUserId,
+                        originUserName = report.effectiveOriginUserName,
+                        originCreatedAt = if (report.originCreatedAt > 0) report.originCreatedAt else report.timestamp,
+                        receivedViaRelay = false
+                    )
+
+                    Log.i("RSQ_ONLINE", "RSQ_ONLINE: FIRESTORE_WRITE_START reportId=$reportId imageUrlsCount=${uploadedUrls.size}")
+                    val cloudResult = repository.submitReport(finalReport)
+
+                    if (cloudResult.isSuccess) {
+                        Log.i("RSQ_ONLINE", "RSQ_ONLINE: FIRESTORE_WRITE_SUCCESS reportId=$reportId")
+                        // Persist to local Room DB with SYNCED status so local UI lists show it
+                        localRepository.saveReport(finalReport, localPaths, SyncStatus.SYNCED)
+                        Log.i("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_SUCCESS reportId=$reportId")
+
+                        // Cleanup temporary internal storage files after full success
+                        for (path in localPaths) {
+                            val file = File(path)
+                            if (file.exists()) file.delete()
+                        }
+
                         _reportState.value = ReportState.Success("Report submitted successfully.")
                         clearForm()
                     } else {
-                        handleSyncFailure(reportId, syncResult.exceptionOrNull())
+                        val error = cloudResult.exceptionOrNull()
+                        Log.e("RSQ_ONLINE", "RSQ_ONLINE: FIRESTORE_WRITE_FAILED reportId=$reportId error=${error?.message}")
+                        _reportState.value = ReportState.Error(error?.message ?: "Cloud submission failed")
                     }
-                } else {
-                    Log.i(TAG, "COMMUNICATION_PATH_SELECTED: OFFLINE (Mesh only)")
-                    _reportState.value = ReportState.PendingSync("Offline: Emergency alert sent to nearby devices. Will sync to cloud when internet returns.")
-                    SyncScheduler.scheduleSync(getApplication())
-                    clearForm() 
+
+                } catch (e: Exception) {
+                    Log.e("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_EXCEPTION reportId=$reportId error=${e.message}", e)
+                    _reportState.value = ReportState.Error(e.message ?: "Report submission failed")
                 }
 
-            } catch (e: Exception) {
-                Log.e(TAG, "REPORT_SUBMIT_FAILED_UNEXPECTED: ${e.message}", e)
-                _reportState.value = ReportState.Error(e.message ?: "Failed to process report")
+            } else {
+                // =========================================================
+                // ROUTE B: EXISTING OFFLINE MESH ROUTE (OFFLINE -> MESH)
+                // =========================================================
+                Log.i(TAG, "COMMUNICATION_PATH_SELECTED: OFFLINE (Mesh only)")
+                try {
+                    // 1. Copy images to internal storage
+                    val localPaths = mutableListOf<String>()
+                    imageUris.forEachIndexed { index, uri ->
+                        val path = ImageStorageManager.copyToInternalStorage(getApplication(), uri, index)
+                        if (path != null) {
+                            localPaths.add(path)
+                        }
+                    }
+
+                    // 2. Multimodal AI Analysis
+                    val aiAnalysisUri = if (localPaths.isNotEmpty()) Uri.fromFile(File(localPaths[0])) else null
+                    val aiResult = SeverityEngine.analyzeMultimodal(
+                        title = report.title,
+                        description = report.description,
+                        imageUri = aiAnalysisUri
+                    )
+
+                    val durationHours = settingsRepository?.visibilityDurationHours?.value ?: 24
+                    val finalReport = report.copy(
+                        id = reportId,
+                        severity = aiResult.severity,
+                        aiScore = aiResult.finalScore,
+                        detectedHazards = aiResult.detectedHazards.map { it.name },
+                        recommendedResources = aiResult.recommendedResources,
+                        expirationTimestamp = report.timestamp + durationHours * 3600 * 1000L,
+                        originUserId = report.effectiveOriginUserId,
+                        originUserName = report.effectiveOriginUserName,
+                        originCreatedAt = if (report.originCreatedAt > 0) report.originCreatedAt else report.timestamp
+                    )
+
+                    // 3. Persist locally FIRST (Durable Offline-First)
+                    localRepository.saveReport(finalReport, localPaths, SyncStatus.LOCAL_ONLY)
+                    Log.i(TAG, "LOCAL_REPORT_SAVED: ID=$reportId")
+
+                    // 4. Mesh broadcast
+                    viewModelScope.launch {
+                        val result = broadcastViaMesh(finalReport, localPaths)
+                        if (result != null && result.isSuccess) {
+                            Log.i(TAG, "MESH_BROADCAST_SUCCESS: reportId=$reportId")
+                        } else {
+                            val error = result?.exceptionOrNull()?.message ?: "Engine or transport unavailable"
+                            Log.w(TAG, "MESH_BROADCAST_FAILED: reportId=$reportId, reason=$error")
+                        }
+                    }
+
+                    // 5. Notify UI & Schedule background WorkManager sync
+                    _reportState.value = ReportState.PendingSync("Offline: Emergency alert sent to nearby devices. Will sync to cloud when internet returns.")
+                    SyncScheduler.scheduleSync(getApplication())
+                    clearForm()
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "REPORT_SUBMIT_FAILED_UNEXPECTED: ${e.message}", e)
+                    _reportState.value = ReportState.Error(e.message ?: "Failed to process report")
+                }
             }
         }
-    }
-
-    private fun handleSyncFailure(reportId: String, error: Throwable?) {
-        val reason = when {
-            error?.message?.contains("upload", true) == true -> "Image upload failed"
-            error?.message?.contains("Firestore", true) == true -> "Cloud write failed"
-            else -> "Connection issue"
-        }
-        Log.w(TAG, "REPORT_SYNC_FAILED: $reportId, reason=$reason, technical=${error?.message}")
-        SyncScheduler.scheduleSync(getApplication())
-        _reportState.value = ReportState.PendingSync("Saved locally. $reason. Syncing will continue in background.")
-        clearForm() 
     }
 
     private fun observeLocalReports() {
@@ -298,8 +355,6 @@ class ReportViewModel(
         return relayEngine?.broadcastMessage(meshMessage, mediaFiles)
     }
 
-
-
     private fun convertToMeshMessage(report: Report): MeshMessage {
         val priority = when (report.severity.uppercase()) {
             "CRITICAL", "HIGH" -> Priority.HIGH
@@ -310,7 +365,7 @@ class ReportViewModel(
         return MeshMessage(
             id = report.id,
             senderNodeId = identityProvider?.getNodeId() ?: "",
-            originNodeId = report.userId,
+            originNodeId = report.effectiveOriginUserId,
             messageType = MeshMessageType.REPORT_RELAY,
             timestamp = report.timestamp,
             latitude = report.latitude,
@@ -320,19 +375,25 @@ class ReportViewModel(
             ttl = 3,
             title = report.title,
             description = report.description,
-            expirationTimestamp = report.expirationTimestamp
+            expirationTimestamp = report.expirationTimestamp,
+            originUserId = report.effectiveOriginUserId,
+            originUserName = report.effectiveOriginUserName,
+            originCreatedAt = if (report.originCreatedAt > 0) report.originCreatedAt else report.timestamp
         )
     }
 
     companion object {
         fun convertFromMeshMessage(msg: MeshMessage): Report {
-            // Prefer explicit fields if available, otherwise fall back to payload parsing
             val title = if (msg.title.isNotBlank()) msg.title else msg.payload.substringBefore(": ")
             val description = if (msg.description.isNotBlank()) msg.description else msg.payload.substringAfter(": ")
+            val originUid = if (msg.originUserId.isNotBlank()) msg.originUserId else msg.originNodeId
+            val originName = if (msg.originUserName.isNotBlank()) msg.originUserName else "User ${originUid.take(6)}"
+            val originTime = if (msg.originCreatedAt > 0) msg.originCreatedAt else msg.timestamp
 
-            return Report(
+            val report = Report(
                 id = msg.id,
-                userId = msg.originNodeId,
+                userId = originUid,
+                userName = originName,
                 title = title,
                 description = description,
                 severity = when (msg.priority) {
@@ -345,8 +406,24 @@ class ReportViewModel(
                 latitude = msg.latitude,
                 longitude = msg.longitude,
                 isOffline = true,
-                expirationTimestamp = msg.expirationTimestamp
+                expirationTimestamp = msg.expirationTimestamp,
+                originUserId = originUid,
+                originUserName = originName,
+                originCreatedAt = originTime,
+                relayDeviceId = msg.senderNodeId,
+                receivedViaRelay = true
             )
+
+            Log.i("RSQ_DIAGNOSTIC", "BOUNDARY_2_CONVERT_FROM_MESH: " +
+                "reportId=${report.id}, " +
+                "originNodeId=${msg.originNodeId}, " +
+                "originUserId=${report.originUserId}, " +
+                "relayDeviceId=${report.relayDeviceId}, " +
+                "relayUserId=${report.relayUserId}, " +
+                "receivedViaRelay=${report.receivedViaRelay}"
+            )
+
+            return report
         }
     }
 

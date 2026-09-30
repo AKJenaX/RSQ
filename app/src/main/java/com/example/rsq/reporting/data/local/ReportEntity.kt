@@ -8,6 +8,7 @@ import com.example.rsq.reporting.model.SyncStatus
 data class ReportEntity(
     @PrimaryKey val id: String,
     val userId: String,
+    val userName: String = "",
     val title: String,
     val description: String,
     val severity: String,
@@ -24,5 +25,12 @@ data class ReportEntity(
     val aiScore: Float,
     val detectedHazards: List<String>,
     val recommendedResources: List<String>,
-    val expirationTimestamp: Long
+    val expirationTimestamp: Long,
+    // Relay identity fields
+    val originUserId: String = "",
+    val originUserName: String = "",
+    val originCreatedAt: Long = 0L,
+    val relayDeviceId: String = "",
+    val relayUserId: String = "",
+    val receivedViaRelay: Boolean = false
 )

@@ -4,6 +4,7 @@ import android.util.Log
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.domain.ReportLifecycle
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
@@ -16,6 +17,8 @@ open class ReportRepository(
     private val firestore: FirebaseFirestore? = null
 ) {
     private val TAG = "ReportRepository"
+    private val SYNC_TAG = "RSQ_SYNC"
+    private val DIAG_LOG = "RSQ_DIAGNOSTIC"
 
     private val db: FirebaseFirestore by lazy {
         firestore ?: FirebaseFirestore.getInstance()
@@ -29,13 +32,15 @@ open class ReportRepository(
         Log.i(TAG, "FIRESTORE_REPORT_CREATE_STARTED: reports/${report.id}")
         return try {
             val docRef = db.collection("reports").document(report.id)
-            
-            // Check if document exists to prevent overwriting status and timestamp with stale mesh data
             val existingDoc = docRef.get().await()
             val exists = existingDoc.exists()
-            
+
+            val currentAuthUid = try { FirebaseAuth.getInstance().currentUser?.uid ?: "" } catch (t: Throwable) { "" }
+            val effectiveOriginUid = report.effectiveOriginUserId
+            val isRelayedReport = report.receivedViaRelay || (effectiveOriginUid.isNotBlank() && currentAuthUid.isNotBlank() && effectiveOriginUid != currentAuthUid)
+
             val reportData = mutableMapOf<String, Any?>(
-                "userId" to report.userId,
+                "userId" to effectiveOriginUid,
                 "title" to report.title,
                 "description" to report.description,
                 "severity" to report.severity,
@@ -46,23 +51,50 @@ open class ReportRepository(
                 "recommendedResources" to report.recommendedResources,
                 "expirationTimestamp" to report.expirationTimestamp
             )
-            
+
+            if (report.userName.isNotBlank()) {
+                reportData["userName"] = report.userName
+            }
+
+            if (isRelayedReport) {
+                reportData["originUserId"] = effectiveOriginUid
+                reportData["originUserName"] = report.effectiveOriginUserName
+                reportData["originCreatedAt"] = if (report.originCreatedAt > 0) report.originCreatedAt else report.timestamp
+                reportData["relayUserId"] = if (report.relayUserId.isNotBlank()) report.relayUserId else currentAuthUid
+                reportData["relayDeviceId"] = report.relayDeviceId
+                reportData["receivedViaRelay"] = true
+            }
+
             if (!exists) {
                 reportData["status"] = report.status.toFirestoreValue()
                 reportData["timestamp"] = report.timestamp
             }
 
-            // Configurable visibility period: ensure expiration is set if not already present
-            // But we will handle expiration logic below when we get to Feature 4.
-            
-            // Only include image fields if they are not empty to prevent relays 
-            // from accidentally clearing evidence uploaded by the origin node.
             if (report.imageUrls.isNotEmpty()) {
                 reportData["imageUrl"] = report.imageUrl
                 reportData["imageUrls"] = report.imageUrls
             } else if (report.imageUrl != null) {
-                 reportData["imageUrl"] = report.imageUrl
+                reportData["imageUrl"] = report.imageUrl
             }
+
+            Log.i(SYNC_TAG, "FIRESTORE_WRITE_PAYLOAD_DIAGNOSTIC: " +
+                "collection=reports, " +
+                "documentId=${report.id}, " +
+                "authenticatedUid=$currentAuthUid, " +
+                "userId=${reportData["userId"]}, " +
+                "originUserId=${reportData["originUserId"]}, " +
+                "relayUserId=${reportData["relayUserId"]}, " +
+                "receivedViaRelay=${reportData["receivedViaRelay"]} (${reportData["receivedViaRelay"]?.javaClass?.simpleName})"
+            )
+
+            Log.i(DIAG_LOG, "BOUNDARY_9_BEFORE_DOCREF_SET: " +
+                "reportId=${report.id}, " +
+                "originNodeId=${reportData["relayDeviceId"]}, " +
+                "originUserId=${reportData["originUserId"]}, " +
+                "relayDeviceId=${reportData["relayDeviceId"]}, " +
+                "relayUserId=${reportData["relayUserId"]}, " +
+                "receivedViaRelay=${reportData["receivedViaRelay"]}"
+            )
 
             docRef.set(reportData, SetOptions.merge()).await()
             Log.i(TAG, "FIRESTORE_REPORT_CREATE_SUCCESS: reports/${report.id}")
@@ -109,7 +141,7 @@ open class ReportRepository(
                     close(error)
                     return@addSnapshotListener
                 }
-                
+
                 if (snapshot != null) {
                     val reports = snapshot.documents.mapNotNull { doc ->
                         val report = doc.toObject(Report::class.java)
@@ -122,7 +154,7 @@ open class ReportRepository(
                     trySend(reports)
                 }
             }
-        
+
         awaitClose { listener.remove() }
     }
 
@@ -139,7 +171,7 @@ open class ReportRepository(
                     close(error)
                     return@addSnapshotListener
                 }
-                
+
                 if (snapshot != null) {
                     val reports = snapshot.documents.mapNotNull { doc ->
                         val report = doc.toObject(Report::class.java)
@@ -152,7 +184,7 @@ open class ReportRepository(
                     trySend(reports)
                 }
             }
-        
+
         awaitClose { listener.remove() }
     }
 

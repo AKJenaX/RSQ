@@ -55,19 +55,39 @@ service cloud.firestore {
 
       allow read: if isAuthenticated();
 
-      allow create: if isAuthenticated()
-                  && request.resource.data.userId == request.auth.uid;
+      // Creation Rule:
+      // Option 1: Direct report creation by original report owner (userId == auth.uid)
+      // Option 2: Relayed submission by authenticated gateway device where:
+      //   - Gateway user is authenticated (relayUserId == auth.uid)
+      //   - receivedViaRelay == true
+      //   - originUserId is present and matches document owner (userId == originUserId)
+      allow create: if isAuthenticated() && (
+        (request.resource.data.userId == request.auth.uid) ||
+        (
+          request.resource.data.receivedViaRelay == true &&
+          request.resource.data.relayUserId == request.auth.uid &&
+          request.resource.data.originUserId != null &&
+          request.resource.data.originUserId != '' &&
+          request.resource.data.userId == request.resource.data.originUserId
+        )
+      );
 
       // Hardened Update Rule:
-      // Option 1: Report Owner (Victim) updating their own report's evidence/media while keeping ownership & timestamp immutable.
-      // Option 2: Authorized Authority updating operational report status (e.g. OPEN -> ASSIGNED -> RESOLVED) while keeping ownership & timestamp immutable.
+      // Option 1: Report Owner (Victim) updating their own report while keeping ownership & timestamp immutable
+      // Option 2: Relay gateway device updating evidence photo URLs for a relayed report
+      // Option 3: Authorized Authority updating report status (e.g. OPEN -> ASSIGNED -> RESOLVED) while keeping ownership & timestamp immutable
       allow update: if isAuthenticated() &&
         request.resource.data.userId == resource.data.userId &&
         request.resource.data.timestamp == resource.data.timestamp &&
         (
           // Case 1: Report owner updating their own report
           (resource.data.userId == request.auth.uid) ||
-          // Case 2: Authorized Authority updating operational report status
+          // Case 2: Relay gateway device updating evidence photo URLs for a relayed report
+          (
+            resource.data.receivedViaRelay == true &&
+            request.resource.data.relayUserId == request.auth.uid
+          ) ||
+          // Case 3: Authorized Authority updating operational report status
           (isAuthority() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']))
         );
 
