@@ -7,7 +7,11 @@ import com.example.rsq.mesh.domain.MeshRelayEngine
 import com.example.rsq.mesh.model.MediaTransferUiState
 import com.example.rsq.mesh.model.MeshMediaMetadata
 import com.example.rsq.reporting.data.LocalReportRepository
+import com.example.rsq.reporting.data.ReportRepository
+import com.example.rsq.reporting.sync.OfflineSyncCoordinator
+import com.example.rsq.reporting.sync.ReportSyncManager
 import com.example.rsq.reporting.sync.SyncScheduler
+import com.example.rsq.storage.data.StorageRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -278,8 +282,8 @@ class PendingMediaRegistry(
                 localReportRepository.addReceivedMedia(meta.reportId, verification.savedFile.absolutePath)
                 Log.i(MESH_LOG, "MEDIA_PERSISTED: reportId=${meta.reportId}, localPath=${verification.savedFile.absolutePath}")
 
-                // Automatically trigger WorkManager cloud sync as soon as evidence is verified & persisted
-                SyncScheduler.scheduleSync(context)
+                // Route offline sync trigger through centralized OfflineSyncCoordinator
+                OfflineSyncCoordinator.triggerSync(context, meta.reportId, scope, localReportRepository)
 
                 // Trigger multi-hop media forwarding if the report was relayed
                 relayEngine?.onMediaFileVerified(meta.reportId, meta.mediaId, verification.savedFile)

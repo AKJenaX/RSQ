@@ -1,6 +1,7 @@
 package com.example.rsq.reporting.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import android.location.Location
@@ -17,9 +18,11 @@ import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.model.ReportState
 import com.example.rsq.reporting.model.SyncStatus
+import com.example.rsq.reporting.model.OfflineSyncStatus
 import com.example.rsq.reporting.sync.ImageStorageManager
 import com.example.rsq.reporting.sync.SyncScheduler
 import com.example.rsq.reporting.sync.ReportSyncManager
+import com.example.rsq.reporting.sync.OfflineSyncCoordinator
 import com.example.rsq.storage.data.StorageRepository
 import com.example.rsq.ai.data.SeverityEngine
 import com.example.rsq.util.ConnectivityObserver
@@ -30,8 +33,14 @@ import com.example.rsq.data.repository.NotificationRepository
 import com.example.rsq.location.model.LocationState
 import com.example.rsq.data.repository.SettingsRepository
 import com.example.rsq.util.EmergencyNotificationManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.io.File
 import java.util.UUID
 
@@ -129,12 +138,36 @@ class ReportViewModel(
     init {
         observeLocalReports()
         observeCloudReports()
+        observeOfflineSyncProgress()
         
         // Trigger automatic synchronization when connectivity is restored
         viewModelScope.launch {
             connectivityStatus.collect { status ->
                 if (status == ConnectivityObserver.Status.Available) {
                     SyncScheduler.scheduleSync(getApplication())
+                }
+            }
+        }
+    }
+
+    private fun observeOfflineSyncProgress() {
+        viewModelScope.launch {
+            OfflineSyncCoordinator.observeProgress().collect { progress ->
+                val currentState = _reportState.value
+                if (currentState is ReportState.PendingSync && 
+                    (currentState.reportId == progress.reportId || currentState.reportId.isBlank())) {
+                    
+                    if (progress.stage == OfflineSyncStatus.SYNCED) {
+                        _reportState.value = ReportState.Success("Report uploaded successfully")
+                    } else {
+                        _reportState.value = ReportState.PendingSync(
+                            reason = progress.message,
+                            statusStage = progress.stage,
+                            uploadedMediaCount = progress.uploadedMediaCount,
+                            totalMediaCount = progress.totalMediaCount,
+                            reportId = progress.reportId
+                        )
+                    }
                 }
             }
         }
@@ -159,14 +192,26 @@ class ReportViewModel(
                 Log.i("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_START reportId=$reportId, userId=${report.userId}")
 
                 try {
-                    // 1. Copy image URIs to internal storage files
+                    // 1. Prepare and optimize image files for fast online upload (resizing max 1280px, JPEG 75%)
+                    val prepStartTime = System.currentTimeMillis()
                     val localPaths = mutableListOf<String>()
                     imageUris.forEachIndexed { index, uri ->
-                        val path = ImageStorageManager.copyToInternalStorage(getApplication(), uri, index)
-                        if (path != null) {
-                            localPaths.add(path)
+                        val itemPrepStart = System.currentTimeMillis()
+                        Log.i("RSQ_ONLINE", "RSQ_ONLINE: IMAGE_PREP_START index=$index uri=$uri")
+                        val file = prepareOptimizedImageFile(getApplication(), uri, index)
+                        if (file != null && file.exists()) {
+                            val sizeBytes = file.length()
+                            val itemPrepDuration = System.currentTimeMillis() - itemPrepStart
+                            Log.i("RSQ_ONLINE", "RSQ_ONLINE: IMAGE_PREP_COMPLETE index=$index sizeBytes=$sizeBytes prepDurationMs=$itemPrepDuration")
+                            localPaths.add(file.absolutePath)
+                        } else {
+                            Log.e("RSQ_ONLINE", "RSQ_ONLINE: IMAGE_PREP_FAILED index=$index")
                         }
                     }
+
+                    val totalPrepDurationMs = System.currentTimeMillis() - prepStartTime
+                    val totalPayloadBytes = localPaths.sumOf { File(it).length() }
+                    Log.i("RSQ_ONLINE", "RSQ_ONLINE: ALL_IMAGES_PREPARED totalCount=${localPaths.size} totalBytes=$totalPayloadBytes totalPrepDurationMs=$totalPrepDurationMs")
 
                     // 2. Multimodal AI Analysis
                     val aiAnalysisUri = if (localPaths.isNotEmpty()) Uri.fromFile(File(localPaths[0])) else null
@@ -176,36 +221,69 @@ class ReportViewModel(
                         imageUri = aiAnalysisUri
                     )
 
-                    // 3. Upload Images directly to Firebase Storage
-                    Log.i("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_START reportId=$reportId count=${localPaths.size}")
+                    // 3. Upload Images directly to Firebase Storage with CONTROLLED CONCURRENCY (max 3 parallel uploads)
+                    Log.i("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_START reportId=$reportId count=${localPaths.size} mode=CONTROLLED_PARALLEL concurrency=3 totalBytes=$totalPayloadBytes")
                     _reportState.value = ReportState.UploadingEvidence
 
-                    val uploadedUrls = mutableListOf<String>()
-                    for (index in localPaths.indices) {
-                        val file = File(localPaths[index])
-                        if (file.exists()) {
-                            val uploadResult = storageRepository.uploadImage(Uri.fromFile(file), reportId, index)
-                            if (uploadResult.isSuccess) {
-                                val downloadUrl = uploadResult.getOrThrow()
-                                uploadedUrls.add(downloadUrl)
-                                Log.i("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_SUCCESS reportId=$reportId index=$index url=$downloadUrl")
-                            } else {
-                                val e = uploadResult.exceptionOrNull()
-                                Log.e("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_FAILED reportId=$reportId index=$index reason=${e?.message}")
-                                _reportState.value = ReportState.Error(e?.message ?: "Image upload failed")
-                                return@launch
+                    val uploadStartTime = System.currentTimeMillis()
+
+                    val uploadedUrls = if (localPaths.isNotEmpty()) {
+                        val semaphore = Semaphore(3)
+                        val uploadDeferreds = coroutineScope {
+                            localPaths.mapIndexed { index, path ->
+                                async(Dispatchers.IO) {
+                                    semaphore.withPermit {
+                                        val singleStart = System.currentTimeMillis()
+                                        val file = File(path)
+                                        if (!file.exists()) {
+                                            val errorMsg = "Local file missing at $path"
+                                            Log.e("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_FAILED reportId=$reportId index=$index reason=$errorMsg")
+                                            throw IllegalStateException(errorMsg)
+                                        }
+                                        Log.i("RSQ_ONLINE", "RSQ_ONLINE: UPLOAD_START index=$index sizeBytes=${file.length()}")
+                                        val uploadResult = storageRepository.uploadImage(Uri.fromFile(file), reportId, index)
+                                        val singleDuration = System.currentTimeMillis() - singleStart
+
+                                        if (uploadResult.isSuccess) {
+                                            val downloadUrl = uploadResult.getOrThrow()
+                                            Log.i("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_SUCCESS index=$index singleDurationMs=$singleDuration")
+                                            downloadUrl
+                                        } else {
+                                            val e = uploadResult.exceptionOrNull()
+                                            val errorMsg = e?.message ?: "Image upload failed at index $index"
+                                            Log.e("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_FAILED index=$index singleDurationMs=$singleDuration reason=$errorMsg")
+                                            throw e ?: Exception(errorMsg)
+                                        }
+                                    }
+                                }
                             }
                         }
+
+                        try {
+                            uploadDeferreds.awaitAll()
+                        } catch (e: Exception) {
+                            Log.e("RSQ_ONLINE", "RSQ_ONLINE: CONTROLLED_MEDIA_UPLOAD_FAILED reportId=$reportId reason=${e.message}")
+                            Log.e("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_EXCEPTION reportId=$reportId error=${e.message}")
+                            _reportState.value = ReportState.Error(e.message ?: "Image upload failed")
+                            return@launch
+                        }
+                    } else {
+                        emptyList()
                     }
+
+                    val uploadDurationMs = System.currentTimeMillis() - uploadStartTime
+                    val aggregateKbps = if (uploadDurationMs > 0) (totalPayloadBytes / 1024.0) / (uploadDurationMs / 1000.0) else 0.0
+                    Log.i("RSQ_ONLINE", "RSQ_ONLINE: CONTROLLED_MEDIA_UPLOAD_COMPLETE reportId=$reportId totalImages=${uploadedUrls.size} durationMs=$uploadDurationMs aggregateKbps=${"%.2f".format(aggregateKbps)}")
 
                     // 4. Submit Report directly to Cloud Firestore
                     _reportState.value = ReportState.CreatingCloudReport
+                    val firestoreStartTime = System.currentTimeMillis()
                     val durationHours = settingsRepository?.visibilityDurationHours?.value ?: 24
                     val finalReport = report.copy(
                         id = reportId,
                         severity = aiResult.severity,
                         aiScore = aiResult.finalScore,
-                        detectedHazards = aiResult.detectedHazards.map { it.name },
+                        detectedHazards = aiResult.detectedHazards.map { hazard -> hazard.name },
                         recommendedResources = aiResult.recommendedResources,
                         imageUrl = uploadedUrls.firstOrNull(),
                         imageUrls = uploadedUrls,
@@ -221,10 +299,12 @@ class ReportViewModel(
                     val cloudResult = repository.submitReport(finalReport)
 
                     if (cloudResult.isSuccess) {
-                        Log.i("RSQ_ONLINE", "RSQ_ONLINE: FIRESTORE_WRITE_SUCCESS reportId=$reportId")
+                        val firestoreDurationMs = System.currentTimeMillis() - firestoreStartTime
+                        val totalSubmitDurationMs = System.currentTimeMillis() - prepStartTime
+                        Log.i("RSQ_ONLINE", "RSQ_ONLINE: FIRESTORE_WRITE_SUCCESS reportId=$reportId firestoreDurationMs=$firestoreDurationMs")
                         // Persist to local Room DB with SYNCED status so local UI lists show it
                         localRepository.saveReport(finalReport, localPaths, SyncStatus.SYNCED)
-                        Log.i("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_SUCCESS reportId=$reportId")
+                        Log.i("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_SUCCESS reportId=$reportId totalSubmitDurationMs=$totalSubmitDurationMs")
 
                         // Cleanup temporary internal storage files after full success
                         for (path in localPaths) {
@@ -237,6 +317,7 @@ class ReportViewModel(
                     } else {
                         val error = cloudResult.exceptionOrNull()
                         Log.e("RSQ_ONLINE", "RSQ_ONLINE: FIRESTORE_WRITE_FAILED reportId=$reportId error=${error?.message}")
+                        Log.e("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_EXCEPTION reportId=$reportId error=${error?.message}")
                         _reportState.value = ReportState.Error(error?.message ?: "Cloud submission failed")
                     }
 
@@ -273,7 +354,7 @@ class ReportViewModel(
                         id = reportId,
                         severity = aiResult.severity,
                         aiScore = aiResult.finalScore,
-                        detectedHazards = aiResult.detectedHazards.map { it.name },
+                        detectedHazards = aiResult.detectedHazards.map { hazard -> hazard.name },
                         recommendedResources = aiResult.recommendedResources,
                         expirationTimestamp = report.timestamp + durationHours * 3600 * 1000L,
                         originUserId = report.effectiveOriginUserId,
@@ -296,9 +377,15 @@ class ReportViewModel(
                         }
                     }
 
-                    // 5. Notify UI & Schedule background WorkManager sync
-                    _reportState.value = ReportState.PendingSync("Offline: Emergency alert sent to nearby devices. Will sync to cloud when internet returns.")
-                    SyncScheduler.scheduleSync(getApplication())
+                    // 5. Notify UI & Trigger offline sync coordinator
+                    _reportState.value = ReportState.PendingSync(
+                        reason = "Sending through mesh network...",
+                        statusStage = OfflineSyncStatus.MESH_RELAYING,
+                        uploadedMediaCount = 0,
+                        totalMediaCount = localPaths.size,
+                        reportId = reportId
+                    )
+                    OfflineSyncCoordinator.triggerSync(getApplication(), reportId, viewModelScope, localRepository)
                     clearForm()
 
                 } catch (e: Exception) {
@@ -306,6 +393,77 @@ class ReportViewModel(
                     _reportState.value = ReportState.Error(e.message ?: "Failed to process report")
                 }
             }
+        }
+    }
+
+    private fun prepareOptimizedImageFile(context: Context, uri: Uri, index: Int): File? {
+        return try {
+            val fileName = "online_opt_${UUID.randomUUID()}.jpg"
+            val destFile = File(context.filesDir, fileName)
+
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val options = android.graphics.BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            android.graphics.BitmapFactory.decodeStream(inputStream, null, options)
+            inputStream.close()
+
+            val srcWidth = options.outWidth
+            val srcHeight = options.outHeight
+
+            if (srcWidth <= 0 || srcHeight <= 0) {
+                val fallbackPath: String? = ImageStorageManager.copyToInternalStorage(context, uri, index)
+                return if (fallbackPath != null) File(fallbackPath) else null
+            }
+
+            val maxDimension = 1280
+            var sampleSize = 1
+            if (srcWidth > maxDimension || srcHeight > maxDimension) {
+                val halfWidth = srcWidth / 2
+                val halfHeight = srcHeight / 2
+                while ((halfWidth / sampleSize) >= maxDimension && (halfHeight / sampleSize) >= maxDimension) {
+                    sampleSize *= 2
+                }
+            }
+
+            val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+            }
+
+            val stream2 = context.contentResolver.openInputStream(uri) ?: return null
+            val bitmap = android.graphics.BitmapFactory.decodeStream(stream2, null, decodeOptions)
+            stream2.close()
+
+            if (bitmap == null) {
+                val fallbackPath: String? = ImageStorageManager.copyToInternalStorage(context, uri, index)
+                return if (fallbackPath != null) File(fallbackPath) else null
+            }
+
+            val width = bitmap.width
+            val height = bitmap.height
+            val scaledBitmap = if (width > maxDimension || height > maxDimension) {
+                val scale = maxDimension.toFloat() / Math.max(width, height)
+                val newWidth = (width * scale).toInt()
+                val newHeight = (height * scale).toInt()
+                android.graphics.Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+            } else {
+                bitmap
+            }
+
+            destFile.outputStream().use { out ->
+                scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, out)
+            }
+
+            if (scaledBitmap != bitmap) {
+                scaledBitmap.recycle()
+            }
+            bitmap.recycle()
+
+            destFile
+        } catch (e: Exception) {
+            Log.w("RSQ_ONLINE", "RSQ_ONLINE: OPTIMIZE_IMAGE_FALLBACK index=$index reason=${e.message}")
+            val fallbackPath: String? = ImageStorageManager.copyToInternalStorage(context, uri, index)
+            if (fallbackPath != null) File(fallbackPath) else null
         }
     }
 

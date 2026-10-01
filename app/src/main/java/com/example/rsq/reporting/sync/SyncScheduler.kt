@@ -56,7 +56,7 @@ object SyncScheduler {
 
                 workManager.enqueueUniqueWork(
                     UNIQUE_WORK_NAME,
-                    ExistingWorkPolicy.REPLACE,
+                    ExistingWorkPolicy.KEEP,
                     syncRequest
                 )
                 Log.i(TAG, "RSQ_SYNC: NEW_WORK_ENQUEUED uniqueWork=$UNIQUE_WORK_NAME id=${syncRequest.id}")

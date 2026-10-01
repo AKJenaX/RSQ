@@ -46,6 +46,7 @@ import com.example.rsq.R
 import com.example.rsq.reporting.model.Report
 import com.example.rsq.reporting.model.ReportStatus
 import com.example.rsq.reporting.model.ReportState
+import com.example.rsq.reporting.model.OfflineSyncStatus
 import com.example.rsq.reporting.viewmodel.ReportViewModel
 import com.example.rsq.location.viewmodel.LocationViewModel
 import com.example.rsq.location.data.LocationRepository
@@ -112,8 +113,9 @@ fun ReportSubmissionScreen(
         }
     }
 
-    // Success Overlay
+    // Existing "Report Submitted" Success Overlay (Reused for both Direct Online and Offline Completion)
     if (reportState is ReportState.Success) {
+        val successState = reportState as ReportState.Success
         Dialog(
             onDismissRequest = { viewModel.resetState(); onNavigateBack() },
             properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
@@ -149,7 +151,7 @@ fun ReportSubmissionScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "Your emergency report has been sent successfully to the responders network.",
+                        text = successState.message.ifBlank { "Your emergency report has been sent successfully to the responders network." },
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -161,6 +163,70 @@ fun ReportSubmissionScreen(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("DONE", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    // Offline / Pending Sync Overlay - ONLY rendered if FAILED (No intermediate popups during transfer!)
+    if (reportState is ReportState.PendingSync) {
+        val pendingState = reportState as ReportState.PendingSync
+        if (pendingState.statusStage == OfflineSyncStatus.FAILED) {
+            Dialog(
+                onDismissRequest = { viewModel.resetState(); onNavigateBack() },
+                properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(80.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudOff,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        Text(
+                            text = "Upload Pending",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Black
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Your report is safely stored locally and will retry automatically.",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        Button(
+                            onClick = { viewModel.resetState(); onNavigateBack() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("DONE", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

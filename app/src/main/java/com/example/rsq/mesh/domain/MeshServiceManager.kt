@@ -1,6 +1,7 @@
 package com.example.rsq.mesh.domain
 
 import android.content.Context
+import android.util.Log
 import com.example.rsq.mesh.data.LocalMeshMessageRepository
 import com.example.rsq.mesh.data.MeshTransportFactory
 import com.example.rsq.mesh.data.NodeIdentityRepository
@@ -11,10 +12,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.SupervisorJob
 import com.example.rsq.mesh.model.MeshMessageType
 import com.example.rsq.reporting.data.LocalReportRepository
+import com.example.rsq.reporting.data.ReportRepository
 import com.example.rsq.reporting.data.local.LocalReportDatabase
 import com.example.rsq.reporting.model.SyncStatus
+import com.example.rsq.reporting.sync.OfflineSyncCoordinator
+import com.example.rsq.reporting.sync.ReportSyncManager
 import com.example.rsq.reporting.sync.SyncScheduler
 import com.example.rsq.reporting.viewmodel.ReportViewModel
+import com.example.rsq.storage.data.StorageRepository
 import com.example.rsq.data.repository.NotificationRepositoryImpl
 import com.example.rsq.data.model.Notification
 import com.example.rsq.data.model.NotificationType
@@ -73,8 +78,8 @@ object MeshServiceManager {
                         }
                     }
 
-                    // Schedule automatic offline-to-online sync
-                    SyncScheduler.scheduleSync(appContext)
+                    // Route offline sync trigger through centralized OfflineSyncCoordinator
+                    OfflineSyncCoordinator.triggerSync(appContext, report.id, scope, localReportRepo)
                 }
         }
     }
