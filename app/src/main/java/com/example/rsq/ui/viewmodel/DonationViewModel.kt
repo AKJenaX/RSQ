@@ -65,7 +65,7 @@ class DonationViewModel(
 
         viewModelScope.launch {
             PaymentResultHandler.errorEvent.collect { data ->
-                _paymentState.value = PaymentState.Failure("Payment failed (${data.code}): ${data.message}")
+                _paymentState.value = PaymentState.Failure("Payment failed\n\nRazorpay error code: ${data.code}\nRazorpay message: ${data.message}")
             }
         }
     }

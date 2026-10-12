@@ -201,7 +201,8 @@ fun AppNavigation() {
                     relayEngine = meshRelayEngine,
                     identityProvider = meshIdentityProvider,
                     notificationRepository = notificationRepository,
-                    settingsRepository = settingsRepository
+                    settingsRepository = settingsRepository,
+                    userIdentityProvider = com.example.rsq.auth.data.FirebaseAuthUserProvider()
                 ) as T
             }
         }

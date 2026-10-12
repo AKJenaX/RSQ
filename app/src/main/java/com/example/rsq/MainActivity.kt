@@ -82,6 +82,9 @@ class MainActivity : ComponentActivity(), PaymentResultWithDataListener {
     }
 
     override fun onPaymentError(code: Int, response: String?, paymentData: PaymentData?) {
+        val orderId = paymentData?.orderId ?: "N/A"
+        val paymentId = paymentData?.paymentId ?: "N/A"
+        Log.e("MainActivity", "RAZORPAY_CHECKOUT_FAILED: Payment failed. Code=$code, Description=${response ?: "N/A"}, OrderId=$orderId, PaymentId=$paymentId")
         lifecycleScope.launch {
             PaymentResultHandler.emitError(
                 PaymentErrorData(

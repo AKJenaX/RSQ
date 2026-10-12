@@ -70,13 +70,16 @@ fun ReportSubmissionScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
-    val locationState by locationViewModel.locationReadiness.collectAsState()
+    val locationStateRaw by locationViewModel.locationReadiness.collectAsState()
     val nearbyState by nearbyViewModel.nearbyReadiness.collectAsState()
     val reportState by viewModel.reportState.collectAsState()
+    val isSubmitting by viewModel.isSubmitting.collectAsState()
+    val connectivityStatus by viewModel.connectivityStatus.collectAsState()
+    val isOnline = connectivityStatus == com.example.rsq.util.ConnectivityObserver.Status.Available
+    val locationPolicy = remember { com.example.rsq.location.domain.LocationConnectivityPolicy() }
+    val locationState = locationPolicy.getEffectiveLocationState(locationStateRaw, isOnline)
 
-    val isProcessing = reportState is ReportState.Submitting || 
-                       reportState is ReportState.UploadingEvidence || 
-                       reportState is ReportState.CreatingCloudReport
+    val isProcessing = isSubmitting
     val isFormEnabled = !isProcessing
 
     val title by viewModel.title.collectAsState()

@@ -19,20 +19,20 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Development backend URLs
-        buildConfigField("String", "DEV_LAN_BASE_URL", "\"http://10.10.12.27:8000/\"")
-        buildConfigField("String", "EMULATOR_BASE_URL", "\"http://10.0.2.2:8000/\"")
+        // Deployed Render backend URL
+        buildConfigField("String", "DEV_LAN_BASE_URL", "\"https://rsq-backend.onrender.com/\"")
+        buildConfigField("String", "EMULATOR_BASE_URL", "\"https://rsq-backend.onrender.com/\"")
     }
 
     buildTypes {
         debug {
-            buildConfigField("String", "DEV_LAN_BASE_URL", "\"http://10.10.12.27:8000/\"")
-            buildConfigField("String", "EMULATOR_BASE_URL", "\"http://10.0.2.2:8000/\"")
+            buildConfigField("String", "DEV_LAN_BASE_URL", "\"https://rsq-backend.onrender.com/\"")
+            buildConfigField("String", "EMULATOR_BASE_URL", "\"https://rsq-backend.onrender.com/\"")
         }
         release {
             isMinifyEnabled = false
-            buildConfigField("String", "DEV_LAN_BASE_URL", "\"https://api.rsq-app.com/\"")
-            buildConfigField("String", "EMULATOR_BASE_URL", "\"https://api.rsq-app.com/\"")
+            buildConfigField("String", "DEV_LAN_BASE_URL", "\"https://rsq-backend.onrender.com/\"")
+            buildConfigField("String", "EMULATOR_BASE_URL", "\"https://rsq-backend.onrender.com/\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -29,7 +29,8 @@ import java.io.File
 class NearbyMeshTransport(
     private val context: Context,
     private val nodeIdentityProvider: NodeIdentityProvider,
-    private val localReportRepository: LocalReportRepository? = null
+    private val localReportRepository: LocalReportRepository? = null,
+    private val meshMessageRepository: com.example.rsq.mesh.domain.MeshMessageRepository? = null
 ) : MeshTransport {
 
     private val connectionsClient = Nearby.getConnectionsClient(context.applicationContext)
@@ -447,6 +448,11 @@ class NearbyMeshTransport(
                 updateDiagnostics { it.copy(lastConnectionEvent = eventMsg) }
                 updateSessionsSummary()
                 updateConnectedPeerCount()
+
+                // FIX 2: Flush pending messages to newly connected peer
+                transportScope?.launch {
+                    flushPendingMessages()
+                }
             } else {
                 Log.w(TAG, "CONNECTION_RESULT: nodeId=$remoteNodeId, endpointId=$endpointId, status=$statusMsg, previousState=$previousState, newState=DISCONNECTED")
                 val eventMsg = "Connection failed: $statusMsg"
@@ -687,5 +693,55 @@ class NearbyMeshTransport(
 
     private fun updateDiagnostics(update: (MeshDiagnostics) -> MeshDiagnostics) {
         _diagnostics.value = update(_diagnostics.value)
+    }
+
+    private val flushMutex = kotlinx.coroutines.sync.Mutex()
+
+    private suspend fun flushPendingMessages() {
+        flushMutex.lock()
+        try {
+            val repo = meshMessageRepository ?: try {
+                LocalMeshMessageRepository(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to instantiate fallback LocalMeshMessageRepository during flush: ${e.message}")
+                return
+            }
+
+            val pendingMessages = repo.getPendingMessages()
+            if (pendingMessages.isEmpty()) return
+
+            Log.i(TAG, "PENDING_FLUSH: Found ${pendingMessages.size} pending messages to sync.")
+
+            val localReportRepoToUse = localReportRepository ?: try {
+                LocalReportRepository(LocalReportDatabase.getDatabase(context).reportDao())
+            } catch (e: Exception) { null }
+
+            for (msg in pendingMessages) {
+                // Ensure media files are reconstructed if they exist locally
+                val mediaFilesToAttach = mutableListOf<File>()
+                if (localReportRepoToUse != null) {
+                    val entity = localReportRepoToUse.getReportById(msg.id)
+                    if (entity != null) {
+                        entity.localImagePaths.forEach { path ->
+                            val file = File(path)
+                            if (file.exists()) mediaFilesToAttach.add(file)
+                        }
+                    }
+                }
+
+                // If media parsing fails, it sends whatever files it can
+                val result = sendMessage(msg, mediaFilesToAttach)
+                if (result.isSuccess) {
+                    repo.markMessageDelivered(msg.id)
+                    Log.i(TAG, "PENDING_FLUSH: Successfully flushed message ${msg.id}")
+                } else {
+                    Log.w(TAG, "PENDING_FLUSH: Failed to flush message ${msg.id}. Keeping as pending.")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "PENDING_FLUSH: Error during flush cycle: ${e.message}", e)
+        } finally {
+            flushMutex.unlock()
+        }
     }
 }

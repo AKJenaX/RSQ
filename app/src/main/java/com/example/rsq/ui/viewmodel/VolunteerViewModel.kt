@@ -37,9 +37,10 @@ class VolunteerViewModel(
             // Try to resolve or create profile first
             volunteerRepository.getVolunteerData(firebaseUid).collect { volunteer ->
                 if (volunteer == null) {
-                    // This case should be handled by AuthViewModel,
-                    // but we'll try a fallback here for robustness
-                    _uiState.value = UiState.Error("Profile not resolved. Please restart app.")
+                    // Fallback: If no profile exists locally, create a default one.
+                    // Because getVolunteerData returns a continuous Flow, creating the
+                    // profile will automatically trigger a new emission with the created Volunteer.
+                    volunteerRepository.createVolunteerProfile(firebaseUid, "Responder")
                     return@collect
                 }
 

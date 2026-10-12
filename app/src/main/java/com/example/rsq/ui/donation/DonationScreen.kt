@@ -50,6 +50,11 @@ fun DonationScreen(
     val context = LocalContext.current
 
     var showAmountDialog by remember { mutableStateOf(false) }
+    var failureDialogMessage by remember { mutableStateOf<String?>(null) }
+    var selectedFilter by remember { mutableStateOf("All") }
+    var showFilterMenu by remember { mutableStateOf(false) }
+
+    val filterOptions = listOf("All", "Completed", "Pending", "Failed")
 
     // Trigger Razorpay Checkout when Order is created
     LaunchedEffect(paymentState) {
@@ -66,6 +71,7 @@ fun DonationScreen(
             }
             is PaymentState.Failure -> {
                 Log.e("DONATION", "[DONATION] PaymentState.Failure: ${currentState.message}")
+                failureDialogMessage = currentState.message
                 Toast.makeText(context, currentState.message, Toast.LENGTH_LONG).show()
                 viewModel.resetPaymentState()
             }
@@ -100,6 +106,14 @@ fun DonationScreen(
                 is UiState.Error -> ErrorView(state.message) { viewModel.loadData() }
                 is UiState.Success -> {
                     val (summary, donations) = state.data
+                    val filteredDonations = remember(donations, selectedFilter) {
+                        if (selectedFilter == "All") {
+                            donations
+                        } else {
+                            donations.filter { it.status.equals(selectedFilter, ignoreCase = true) }
+                        }
+                    }
+
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -122,18 +136,71 @@ fun DonationScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "Recent Transactions",
+                                    text = if (selectedFilter == "All") "Recent Transactions" else "Recent Transactions ($selectedFilter)",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.ExtraBold
                                 )
-                                IconButton(onClick = {}) {
-                                    Icon(Icons.Default.Tune, contentDescription = "Filter")
+                                Box {
+                                    IconButton(onClick = { showFilterMenu = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Tune,
+                                            contentDescription = "Filter",
+                                            tint = if (selectedFilter != "All") MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showFilterMenu,
+                                        onDismissRequest = { showFilterMenu = false }
+                                    ) {
+                                        filterOptions.forEach { option ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(
+                                                        text = option,
+                                                        fontWeight = if (option == selectedFilter) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (option == selectedFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                },
+                                                onClick = {
+                                                    selectedFilter = option
+                                                    showFilterMenu = false
+                                                },
+                                                leadingIcon = {
+                                                    if (option == selectedFilter) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Check,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
 
-                        items(donations) { donation ->
-                            EnhancedDonationCard(donation)
+                        if (filteredDonations.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = if (selectedFilter == "All") "No transaction history available." else "No $selectedFilter transactions found.",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        } else {
+                            items(filteredDonations) { donation ->
+                                EnhancedDonationCard(donation)
+                            }
                         }
                     }
                 }
@@ -149,6 +216,19 @@ fun DonationScreen(
                 Log.d("DONATION", "[DONATION] amount = $amount")
                 showAmountDialog = false
                 viewModel.startDonationFlow(amount, userName, userId)
+            }
+        )
+    }
+
+    failureDialogMessage?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { failureDialogMessage = null },
+            title = { Text("Payment Details", fontWeight = FontWeight.Bold) },
+            text = { Text(msg) },
+            confirmButton = {
+                Button(onClick = { failureDialogMessage = null }) {
+                    Text("OK")
+                }
             }
         )
     }
@@ -403,7 +483,7 @@ fun startRazorpayCheckout(
 
     val checkout = Checkout()
     // Explicitly set the key again to be sure
-    checkout.setKeyID("rzp_test_TVvZzrCuli56f5")
+    checkout.setKeyID("rzp_test_Tl6faDCzyiJ4OF")
 
     try {
         val options = JSONObject()

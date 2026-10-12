@@ -2,9 +2,6 @@ package com.example.rsq.ui.volunteer
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -15,11 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rsq.data.model.Volunteer
 import com.example.rsq.data.model.Assignment
-import com.example.rsq.data.model.AssignmentStatus
 import com.example.rsq.ui.common.*
 import com.example.rsq.ui.viewmodel.UiState
 import com.example.rsq.ui.viewmodel.VolunteerViewModel
@@ -74,9 +68,6 @@ fun VolunteerDashboardScreen(
                     val data = state.data
                     VolunteerContent(
                         volunteer = data.volunteer,
-                        assignments = data.assignments,
-                        onNavigateToAssignments = onNavigateToAssignments,
-                        onAcceptAssignment = { viewModel.acceptAssignment(it) },
                         onToggleAvailability = { viewModel.toggleAvailability(it) }
                     )
                 }
@@ -88,278 +79,84 @@ fun VolunteerDashboardScreen(
 @Composable
 private fun VolunteerContent(
     volunteer: Volunteer,
-    assignments: List<Assignment>,
-    onNavigateToAssignments: () -> Unit,
-    onAcceptAssignment: (String) -> Unit,
     onToggleAvailability: (Boolean) -> Unit
 ) {
-    LazyColumn(
+    var isOptimisticallyAvailable by remember(volunteer.isAvailable) {
+        mutableStateOf(volunteer.isAvailable)
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        contentPadding = PaddingValues(16.dp)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        item {
+        // Availability Section
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                VolunteerHeader(volunteer.name)
-                
-                // Material 3 Availability Toggle
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = if (volunteer.isAvailable) "ON DUTY" else "OFF DUTY",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (volunteer.isAvailable) Color(0xFF388E3C) else Color.Gray
-                    )
-                    Switch(
-                        checked = volunteer.isAvailable,
-                        onCheckedChange = { onToggleAvailability(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF388E3C),
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color.Gray
-                        )
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            SummaryGrid(volunteer)
-        }
-
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Recent Alerts",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = onNavigateToAssignments) {
-                    Text("All Assignments")
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(16.dp))
-                }
-            }
-        }
-
-        items(assignments) { assignment ->
-            AssignmentCard(
-                assignment = assignment,
-                onAccept = { onAcceptAssignment(assignment.id) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun VolunteerHeader(name: String) {
-    Column {
-        Text(
-            text = "Ready to help,",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = name,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.ExtraBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-@Composable
-private fun SummaryGrid(data: Volunteer) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            RSQStatCard(
-                label = "Total",
-                value = data.totalAssignments.toString(),
-                icon = Icons.Default.Assessment,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f)
-            )
-            RSQStatCard(
-                label = "Pending",
-                value = data.pendingAssignments.toString(),
-                icon = Icons.Default.HourglassTop,
-                color = Color(0xFFFBC02D),
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            RSQStatCard(
-                label = "Active",
-                value = data.activeAssignments.toString(),
-                icon = Icons.Default.FlashOn,
-                color = Color(0xFF1976D2),
-                modifier = Modifier.weight(1f)
-            )
-            RSQStatCard(
-                label = "Saved",
-                value = data.completedAssignments.toString(),
-                icon = Icons.Default.AutoAwesome,
-                color = Color(0xFF388E3C),
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun AssignmentCard(assignment: Assignment, onAccept: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = assignment.id,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (assignment.syncState == "PENDING") {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                color = Color(0xFFFFF3E0),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.Sync,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(10.dp),
-                                        tint = Color(0xFFEF6C00)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "Pending Sync",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFFEF6C00)
-                                    )
-                                }
-                            }
-                        }
-                    }
                     Text(
-                        text = assignment.disasterType,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                }
-                RSQPriorityBadge(assignment.priority)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    modifier = Modifier.size(32.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    text = assignment.location,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (assignment.volunteerId != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Assigned to: ${assignment.volunteerName}",
-                        style = MaterialTheme.typography.labelMedium,
+                        text = "Availability",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
+                    Text(
+                        text = if (isOptimisticallyAvailable) "ON DUTY" else "OFF DUTY",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isOptimisticallyAvailable) Color(0xFF388E3C) else Color.Gray
+                    )
                 }
+                Switch(
+                    checked = isOptimisticallyAvailable,
+                    onCheckedChange = {
+                        isOptimisticallyAvailable = it
+                        onToggleAvailability(it)
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFF388E3C),
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color.Gray
+                    )
+                )
             }
+        }
 
-            Spacer(modifier = Modifier.height(20.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Spacer(modifier = Modifier.height(16.dp))
-
+        // Request Count Section
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "Status",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = assignment.status.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = when(assignment.status) {
-                            AssignmentStatus.IN_PROGRESS -> Color(0xFFFBC02D)
-                            AssignmentStatus.ASSIGNED -> Color(0xFF1976D2)
-                            AssignmentStatus.RESOLVED -> Color(0xFF388E3C)
-                            else -> MaterialTheme.colorScheme.onSurface
-                        }
-                    )
-                }
-
-                if (assignment.status == AssignmentStatus.AVAILABLE) {
-                    Button(
-                        onClick = onAccept,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF388E3C)
-                        ),
-                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
-                    ) {
-                        Text("Accept", fontWeight = FontWeight.Bold)
-                    }
-                }
+                Text(
+                    text = "Pending Requests",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = volunteer.pendingAssignments.toString(),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }

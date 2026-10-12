@@ -33,7 +33,10 @@ import com.example.rsq.data.repository.NotificationRepository
 import com.example.rsq.location.model.LocationState
 import com.example.rsq.data.repository.SettingsRepository
 import com.example.rsq.util.EmergencyNotificationManager
+import com.example.rsq.auth.domain.UserIdentityProvider
+import com.example.rsq.reporting.domain.ReportVisibilityPolicy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -55,7 +58,8 @@ class ReportViewModel(
     private val identityProvider: NodeIdentityProvider? = null,
     private val notificationRepository: NotificationRepository? = null,
     private val settingsRepository: SettingsRepository? = null,
-    private val storageRepository: StorageRepository = StorageRepository()
+    private val storageRepository: StorageRepository = StorageRepository(),
+    private val userIdentityProvider: UserIdentityProvider? = null
 ) : AndroidViewModel(application) {
 
     private val TAG = "RSQ_IMAGE_SYNC"
@@ -100,6 +104,9 @@ class ReportViewModel(
     private val _reportState = MutableStateFlow<ReportState>(ReportState.Idle)
     val reportState: StateFlow<ReportState> = _reportState.asStateFlow()
 
+    private val _isSubmitting = MutableStateFlow(false)
+    val isSubmitting: StateFlow<Boolean> = _isSubmitting.asStateFlow()
+
     private val _reports = MutableStateFlow<List<Report>>(emptyList())
     val reports: StateFlow<List<Report>> = _reports.asStateFlow()
 
@@ -109,24 +116,13 @@ class ReportViewModel(
     ), settingsRepository?.visibilityRadiusKm ?: MutableStateFlow(50)) { cloudAndMesh, locState, radiusKm ->
         val reportMap = mutableMapOf<String, Report>()
         val currentTime = System.currentTimeMillis()
-        val visibilityRadiusMeters = radiusKm * 1000.0
+        val visibilityPolicy = ReportVisibilityPolicy()
 
         cloudAndMesh.forEach { reportMap[it.id] = it }
 
         reportMap.values
             .filter { report -> 
-                report.expirationTimestamp == 0L || report.expirationTimestamp > currentTime 
-            }
-            .filter { report -> // Feature 3: Distance-based visibility
-                val userLat = locState.latitude
-                val userLon = locState.longitude
-                if (userLat != null && userLon != null && report.latitude != null && report.longitude != null) {
-                    val results = FloatArray(1)
-                    Location.distanceBetween(userLat, userLon, report.latitude, report.longitude, results)
-                    results[0] <= visibilityRadiusMeters
-                } else {
-                    true // If location is missing for either user or report, show it safely
-                }
+                visibilityPolicy.isVisible(report, locState, radiusKm, currentTime)
             }
             .sortedByDescending { it.timestamp }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -135,8 +131,11 @@ class ReportViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ConnectivityObserver.Status.Unavailable)
     val connectivityStatus: StateFlow<ConnectivityObserver.Status> = _connectivityStatus
 
+    private var reportsJob: Job? = null
+    private var currentReportsUserId: String? = null
+
     init {
-        observeLocalReports()
+        startReportsObservation(null)
         observeCloudReports()
         observeOfflineSyncProgress()
         
@@ -159,6 +158,7 @@ class ReportViewModel(
                     
                     if (progress.stage == OfflineSyncStatus.SYNCED) {
                         _reportState.value = ReportState.Success("Report uploaded successfully")
+                        _isSubmitting.value = false
                     } else {
                         _reportState.value = ReportState.PendingSync(
                             reason = progress.message,
@@ -167,6 +167,9 @@ class ReportViewModel(
                             totalMediaCount = progress.totalMediaCount,
                             reportId = progress.reportId
                         )
+                        if (progress.stage == OfflineSyncStatus.FAILED || progress.stage == OfflineSyncStatus.MESH_RELAYING) {
+                            _isSubmitting.value = false
+                        }
                     }
                 }
             }
@@ -174,13 +177,12 @@ class ReportViewModel(
     }
 
     fun submitReport(report: Report, imageUris: List<Uri> = emptyList()) {
-        if (_reportState.value is ReportState.Submitting || 
-            _reportState.value is ReportState.UploadingEvidence || 
-            _reportState.value is ReportState.CreatingCloudReport) {
+        if (_isSubmitting.value) {
             return
         }
         viewModelScope.launch {
             _reportState.value = ReportState.Submitting
+            _isSubmitting.value = true
             val reportId = if (report.id.isBlank()) UUID.randomUUID().toString() else report.id
             val isOnline = _connectivityStatus.value == ConnectivityObserver.Status.Available
 
@@ -220,6 +222,41 @@ class ReportViewModel(
                         description = report.description,
                         imageUri = aiAnalysisUri
                     )
+
+                    // NEW: Construct base report and save locally for offline/mesh redundancy
+                    val durationHours = settingsRepository?.visibilityDurationHours?.value ?: 24
+                    val baseReport = report.copy(
+                        id = reportId,
+                        severity = aiResult.severity,
+                        aiScore = aiResult.finalScore,
+                        detectedHazards = aiResult.detectedHazards.map { hazard -> hazard.name },
+                        recommendedResources = aiResult.recommendedResources,
+                        isOffline = false,
+                        expirationTimestamp = report.timestamp + durationHours * 3600 * 1000L,
+                        originUserId = report.effectiveOriginUserId,
+                        originUserName = report.effectiveOriginUserName,
+                        originCreatedAt = if (report.originCreatedAt > 0) report.originCreatedAt else report.timestamp,
+                        receivedViaRelay = false
+                    )
+
+                    localRepository.saveReport(baseReport, localPaths, SyncStatus.LOCAL_ONLY)
+                    Log.i("RSQ_ONLINE", "LOCAL_REPORT_SAVED_EARLY: ID=$reportId")
+
+                    // NEW: Mesh Broadcast for Online Reports
+                    viewModelScope.launch {
+                        Log.i("RSQ_ONLINE", "MESH_BROADCAST_ATTEMPT: reportId=$reportId")
+                        try {
+                            val result = broadcastViaMesh(baseReport, localPaths)
+                            if (result != null && result.isSuccess) {
+                                Log.i("RSQ_ONLINE", "MESH_BROADCAST_SUCCESS: reportId=$reportId")
+                            } else {
+                                val errorMsg = result?.exceptionOrNull()?.message ?: "Engine or transport unavailable"
+                                Log.w("RSQ_ONLINE", "MESH_BROADCAST_FAILED: reportId=$reportId, reason=$errorMsg")
+                            }
+                        } catch (e: Exception) {
+                            Log.e("RSQ_ONLINE", "MESH_BROADCAST_FAILED: reportId=$reportId, reason=${e.message}", e)
+                        }
+                    }
 
                     // 3. Upload Images directly to Firebase Storage with CONTROLLED CONCURRENCY (max 3 parallel uploads)
                     Log.i("RSQ_ONLINE", "RSQ_ONLINE: MEDIA_UPLOAD_START reportId=$reportId count=${localPaths.size} mode=CONTROLLED_PARALLEL concurrency=3 totalBytes=$totalPayloadBytes")
@@ -265,6 +302,7 @@ class ReportViewModel(
                             Log.e("RSQ_ONLINE", "RSQ_ONLINE: CONTROLLED_MEDIA_UPLOAD_FAILED reportId=$reportId reason=${e.message}")
                             Log.e("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_EXCEPTION reportId=$reportId error=${e.message}")
                             _reportState.value = ReportState.Error(e.message ?: "Image upload failed")
+                            _isSubmitting.value = false
                             return@launch
                         }
                     } else {
@@ -278,21 +316,9 @@ class ReportViewModel(
                     // 4. Submit Report directly to Cloud Firestore
                     _reportState.value = ReportState.CreatingCloudReport
                     val firestoreStartTime = System.currentTimeMillis()
-                    val durationHours = settingsRepository?.visibilityDurationHours?.value ?: 24
-                    val finalReport = report.copy(
-                        id = reportId,
-                        severity = aiResult.severity,
-                        aiScore = aiResult.finalScore,
-                        detectedHazards = aiResult.detectedHazards.map { hazard -> hazard.name },
-                        recommendedResources = aiResult.recommendedResources,
+                    val finalReport = baseReport.copy(
                         imageUrl = uploadedUrls.firstOrNull(),
-                        imageUrls = uploadedUrls,
-                        isOffline = false,
-                        expirationTimestamp = report.timestamp + durationHours * 3600 * 1000L,
-                        originUserId = report.effectiveOriginUserId,
-                        originUserName = report.effectiveOriginUserName,
-                        originCreatedAt = if (report.originCreatedAt > 0) report.originCreatedAt else report.timestamp,
-                        receivedViaRelay = false
+                        imageUrls = uploadedUrls
                     )
 
                     Log.i("RSQ_ONLINE", "RSQ_ONLINE: FIRESTORE_WRITE_START reportId=$reportId imageUrlsCount=${uploadedUrls.size}")
@@ -313,17 +339,20 @@ class ReportViewModel(
                         }
 
                         _reportState.value = ReportState.Success("Report submitted successfully.")
+                        _isSubmitting.value = false
                         clearForm()
                     } else {
                         val error = cloudResult.exceptionOrNull()
                         Log.e("RSQ_ONLINE", "RSQ_ONLINE: FIRESTORE_WRITE_FAILED reportId=$reportId error=${error?.message}")
                         Log.e("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_EXCEPTION reportId=$reportId error=${error?.message}")
                         _reportState.value = ReportState.Error(error?.message ?: "Cloud submission failed")
+                        _isSubmitting.value = false
                     }
 
                 } catch (e: Exception) {
                     Log.e("RSQ_ONLINE", "RSQ_ONLINE: DIRECT_SUBMIT_EXCEPTION reportId=$reportId error=${e.message}", e)
                     _reportState.value = ReportState.Error(e.message ?: "Report submission failed")
+                    _isSubmitting.value = false
                 }
 
             } else {
@@ -368,12 +397,17 @@ class ReportViewModel(
 
                     // 4. Mesh broadcast
                     viewModelScope.launch {
-                        val result = broadcastViaMesh(finalReport, localPaths)
-                        if (result != null && result.isSuccess) {
-                            Log.i(TAG, "MESH_BROADCAST_SUCCESS: reportId=$reportId")
-                        } else {
-                            val error = result?.exceptionOrNull()?.message ?: "Engine or transport unavailable"
-                            Log.w(TAG, "MESH_BROADCAST_FAILED: reportId=$reportId, reason=$error")
+                        Log.i(TAG, "MESH_BROADCAST_ATTEMPT: reportId=$reportId")
+                        try {
+                            val result = broadcastViaMesh(finalReport, localPaths)
+                            if (result != null && result.isSuccess) {
+                                Log.i(TAG, "MESH_BROADCAST_SUCCESS: reportId=$reportId")
+                            } else {
+                                val error = result?.exceptionOrNull()?.message ?: "Engine or transport unavailable"
+                                Log.w(TAG, "MESH_BROADCAST_FAILED: reportId=$reportId, reason=$error")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "MESH_BROADCAST_FAILED: reportId=$reportId, reason=${e.message}", e)
                         }
                     }
 
@@ -385,12 +419,14 @@ class ReportViewModel(
                         totalMediaCount = localPaths.size,
                         reportId = reportId
                     )
+                    _isSubmitting.value = false
                     OfflineSyncCoordinator.triggerSync(getApplication(), reportId, viewModelScope, localRepository)
                     clearForm()
 
                 } catch (e: Exception) {
                     Log.e(TAG, "REPORT_SUBMIT_FAILED_UNEXPECTED: ${e.message}", e)
                     _reportState.value = ReportState.Error(e.message ?: "Failed to process report")
+                    _isSubmitting.value = false
                 }
             }
         }
@@ -467,10 +503,64 @@ class ReportViewModel(
         }
     }
 
-    private fun observeLocalReports() {
-        viewModelScope.launch {
-            localRepository.observeAllReports().collect { localReports ->
-                _reports.value = localReports
+    private fun startReportsObservation(userId: String? = null) {
+        if (currentReportsUserId == userId && reportsJob?.isActive == true) {
+            return
+        }
+
+        reportsJob?.cancel()
+        currentReportsUserId = userId
+
+        reportsJob = viewModelScope.launch {
+            if (userId == null) {
+                localRepository.observeAllReports().collect { localReports ->
+                    _reports.value = localReports
+                }
+            } else {
+                combine(
+                    localRepository.observeAllReports(),
+                    repository.observeReports(userId)
+                ) { localReports, cloudReports ->
+                    val mergedMap = mutableMapOf<String, Report>()
+
+                    // 1. Add all local reports first
+                    localReports.forEach { report ->
+                        mergedMap[report.id] = report
+                    }
+
+                    // 2. Add or overwrite with cloud reports
+                    cloudReports.forEach { report ->
+                        mergedMap[report.id] = report
+                    }
+
+                    val mergedReports = mergedMap.values.toList()
+
+                    // Notifications for changes in the status of reports submitted by the user.
+                    val currentLocal = _reports.value
+                    val newStatusReports = cloudReports.filter { cloudReport ->
+                        val local = currentLocal.find { it.id == cloudReport.id }
+                        local != null && local.status != cloudReport.status
+                    }
+
+                    newStatusReports.forEach { updatedReport ->
+                        notificationRepository?.addNotification(
+                            Notification(
+                                id = UUID.randomUUID().toString(),
+                                recipientId = userId,
+                                title = "Report Status Updated",
+                                message = "Your report for ${updatedReport.title} is now ${updatedReport.status.name}.",
+                                timestamp = "Just now",
+                                type = NotificationType.SOS_ALERT,
+                                associatedReportId = updatedReport.id
+                            )
+                        )
+                    }
+
+                    mergedReports
+                }.collect { mergedReports ->
+                    _reports.value = mergedReports
+                    _reportState.value = ReportState.Idle
+                }
             }
         }
     }
@@ -479,7 +569,7 @@ class ReportViewModel(
         viewModelScope.launch {
             repository.observeAllActiveReports().collect { cloudReports ->
                 val currentTime = System.currentTimeMillis()
-                val localUserId = identityProvider?.getNodeId() ?: ""
+                val localUserId = userIdentityProvider?.getUserId() ?: ""
                 cloudReports.forEach { report ->
                     val isExpired = report.expirationTimestamp > 0L && report.expirationTimestamp <= currentTime
                     if (!isExpired) {
@@ -586,33 +676,7 @@ class ReportViewModel(
     }
 
     fun loadReports(userId: String) {
-        viewModelScope.launch {
-            // Feature 1: Notifications for changes in the status of reports submitted by the user.
-            repository.observeReports(userId).collect { cloudReports ->
-                val currentLocal = _reports.value
-                val newStatusReports = cloudReports.filter { cloudReport ->
-                    val local = currentLocal.find { it.id == cloudReport.id }
-                    local != null && local.status != cloudReport.status
-                }
-                
-                _reports.value = cloudReports
-                _reportState.value = ReportState.Idle
-                
-                newStatusReports.forEach { updatedReport ->
-                    notificationRepository?.addNotification(
-                        Notification(
-                            id = UUID.randomUUID().toString(),
-                            recipientId = userId,
-                            title = "Report Status Updated",
-                            message = "Your report for ${updatedReport.title} is now ${updatedReport.status.name}.",
-                            timestamp = "Just now",
-                            type = NotificationType.SOS_ALERT,
-                            associatedReportId = updatedReport.id
-                        )
-                    )
-                }
-            }
-        }
+        startReportsObservation(userId)
     }
 
     fun resetState() {

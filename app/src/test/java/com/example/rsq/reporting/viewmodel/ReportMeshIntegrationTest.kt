@@ -105,7 +105,7 @@ class ReportMeshIntegrationTest {
     }
 
     @Test
-    fun `submitting a report online should trigger direct firestore upload without mesh broadcast`() = runTest(testDispatcher) {
+    fun `submitting a report online should trigger direct firestore upload and mesh broadcast`() = runTest(testDispatcher) {
         val onlineObserver = FakeConnectivityObserver(ConnectivityObserver.Status.Available)
         relayEngine = MeshRelayEngine(fakeMeshTransport, fakeMeshRepository, fakeIdentityProvider, backgroundScope)
         viewModel = ReportViewModel(
@@ -127,8 +127,10 @@ class ReportMeshIntegrationTest {
         // 1. Verify Direct Firestore submission was called
         assertTrue("Firestore should be called directly when online", fakeReportRepository.submitCalled)
 
-        // 2. Verify Mesh Broadcast was NOT called on online route
-        assertEquals(0, fakeMeshTransport.sentMessages.size)
+        // 2. Verify Mesh Broadcast WAS called on online route (new behavior)
+        assertEquals(1, fakeMeshTransport.sentMessages.size)
+        assertEquals("online-rep-100", fakeMeshTransport.sentMessages[0].id)
+        assertEquals("local-node", fakeMeshTransport.sentMessages[0].senderNodeId)
 
         // 3. Verify UI state is Success
         val state = viewModel.reportState.value

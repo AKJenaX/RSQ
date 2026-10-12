@@ -29,9 +29,7 @@ object NetworkModule {
 
     /**
      * Active Base URL resolved dynamically based on execution environment:
-     * - Android Emulator: http://10.0.2.2:8000/
-     * - Physical Device: http://10.10.12.27:8000/
-     * - Release: https://api.rsq-app.com/
+     * - Deployed Render Backend: https://rsq-backend.onrender.com/
      */
     val BASE_URL: String by lazy {
         val url = if (isEmulator()) {

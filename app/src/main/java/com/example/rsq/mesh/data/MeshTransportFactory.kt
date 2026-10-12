@@ -34,7 +34,8 @@ object MeshTransportFactory {
                 MockMeshTransport(identityProvider)
             } else {
                 Log.i(TAG, "Selecting production NearbyMeshTransport (Google Nearby Connections).")
-                NearbyMeshTransport(context.applicationContext, identityProvider)
+                val repo = LocalMeshMessageRepository(context.applicationContext)
+                NearbyMeshTransport(context.applicationContext, identityProvider, meshMessageRepository = repo)
             }.also { instance = it }
         }
     }

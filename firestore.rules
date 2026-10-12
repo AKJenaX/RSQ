@@ -141,5 +141,14 @@ service cloud.firestore {
       // Completed donations must only be written by the FastAPI backend using Firebase Admin SDK.
       allow write: if false;
     }
+
+    // =========================
+    // IMPACT FUND AGGREGATES
+    // =========================
+    match /funds/{document=**} {
+      // Allow public or authenticated read for the global balance
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }

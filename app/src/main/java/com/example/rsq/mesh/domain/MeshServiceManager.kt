@@ -36,6 +36,7 @@ object MeshServiceManager {
         if (engine != null) return
         val appContext = context.applicationContext
         val identityProvider = NodeIdentityRepository(appContext)
+        val userIdentityProvider = com.example.rsq.auth.data.FirebaseAuthUserProvider()
         val repo = LocalMeshMessageRepository(appContext)
         
         transport = MeshTransportFactory.createTransport(appContext, identityProvider)
@@ -60,7 +61,7 @@ object MeshServiceManager {
                     localReportRepo.saveReport(report, emptyList(), SyncStatus.LOCAL_ONLY)
 
                     // Notification
-                    val userId = identityProvider.getNodeId()
+                    val userId = userIdentityProvider.getUserId()
                     if (userId.isNotBlank()) {
                         val notif = Notification(
                             id = "NT_SOS_${report.id}",
