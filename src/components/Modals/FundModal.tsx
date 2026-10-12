@@ -85,7 +85,7 @@ export function FundModal({ onClose }: FundModalProps) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Budget ($)</label>
+            <label className="mb-1 block text-sm font-medium">Budget (₹)</label>
             <input
               type="number"
               min="0"

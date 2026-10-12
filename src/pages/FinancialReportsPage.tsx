@@ -13,13 +13,11 @@ import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
 import { useFinance } from "../hooks/useFinance";
 import { useAuth } from '../hooks/useAuth';
 import { generateFinancialReport } from '../services/financeService';
-import { formatTimestamp } from '../utils/formatters';
+import { formatINR, formatTimestamp } from '../utils/formatters';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
-const currency = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
 const tooltipStyle = {
   backgroundColor: "var(--color-card)",
@@ -196,16 +194,16 @@ export function FinancialReportsPage() {
                 // KPIs
                 const progRatio = Math.round((totalUtilized / Math.max(totalAllocated, 1)) * 100);
                 doc.setFontSize(12);
-                doc.text(`Total Income: ${currency(income)}`, 14, 55);
-                doc.text(`Total Expenditure: ${currency(spend)}`, 14, 62);
-                doc.text(`Net Position: ${currency(income - spend)}`, 14, 69);
+                doc.text(`Total Income: ${formatINR(income)}`, 14, 55);
+                doc.text(`Total Expenditure: ${formatINR(spend)}`, 14, 62);
+                doc.text(`Net Position: ${formatINR(income - spend)}`, 14, 69);
                 doc.text(`Programme Ratio: ${progRatio}%`, 14, 76);
                 
                 // Table Data
                 const tableBody = realFinanceTrend.map(t => [
                   t.fullDate || t.label,
-                  currency(t.donations),
-                  currency(t.expenses)
+                  formatINR(t.donations),
+                  formatINR(t.expenses)
                 ]);
                 
                 autoTable(doc, {
@@ -237,9 +235,9 @@ export function FinancialReportsPage() {
       {error && <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">Financial records could not be loaded from Firestore.</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label={`Income (${chartLength} mo)`} value={currency(income)} hint="all sources" />
-        <StatCard label={`Expenditure (${chartLength} mo)`} value={currency(spend)} hint="programme spend" />
-        <StatCard label="Net Position" value={currency(income - spend)} hint="carried forward" />
+        <StatCard label={`Income (${chartLength} mo)`} value={formatINR(income)} hint="all sources" />
+        <StatCard label={`Expenditure (${chartLength} mo)`} value={formatINR(spend)} hint="programme spend" />
+        <StatCard label="Net Position" value={formatINR(income - spend)} hint="carried forward" />
         <StatCard label="Programme Ratio" value={`${Math.round((totalUtilized / Math.max(totalAllocated, 1)) * 100)}%`} hint="spend reaching field" />
       </div>
 
@@ -256,10 +254,10 @@ export function FinancialReportsPage() {
                 axisLine={false} 
                 minTickGap={20}
               />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={60} tickFormatter={(v) => currency(v as number)} />
+              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={60} tickFormatter={(v) => formatINR(v as number, { maximumFractionDigits: 0 })} />
               <Tooltip 
                 contentStyle={tooltipStyle} 
-                formatter={(v: any) => currency(v as number)}
+                formatter={(v: any) => formatINR(v as number)}
                 labelFormatter={(_, payload) => payload?.[0]?.payload?.fullDate || ''}
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -314,20 +312,20 @@ export function FinancialReportsPage() {
               <li key={f.fundId} className="border-b border-border pb-4 last:border-0 last:pb-0">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold">{f.purpose || f.fundId}</span>
-                  <span className="text-xs text-muted-foreground tabular-nums">Budget: {currency(f.totalAmount)}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">Budget: {formatINR(f.totalAmount)}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="bg-muted/30 p-2 rounded">
                     <p className="text-muted-foreground mb-1">Allocated</p>
-                    <p className="font-medium">{currency(f.allocatedAmount || 0)}</p>
+                    <p className="font-medium">{formatINR(f.allocatedAmount || 0)}</p>
                   </div>
                   <div className="bg-muted/30 p-2 rounded">
                     <p className="text-muted-foreground mb-1">Utilized</p>
-                    <p className="font-medium">{currency(f.utilizedAmount || 0)}</p>
+                    <p className="font-medium">{formatINR(f.utilizedAmount || 0)}</p>
                   </div>
                   <div className="bg-muted/30 p-2 rounded border border-primary/20 bg-primary/5">
                     <p className="text-primary/80 mb-1">Available</p>
-                    <p className="font-medium text-primary">{currency((f.allocatedAmount || 0) - (f.utilizedAmount || 0))}</p>
+                    <p className="font-medium text-primary">{formatINR((f.allocatedAmount || 0) - (f.utilizedAmount || 0))}</p>
                   </div>
                 </div>
               </li>

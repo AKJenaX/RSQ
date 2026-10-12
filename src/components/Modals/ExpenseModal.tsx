@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { createExpense } from '../../services/financeService';
 import type { Fund } from '../../types/finance';
+import { formatINR } from '../../utils/formatters';
 
 interface ExpenseModalProps {
   authorityUid: string;
@@ -35,7 +36,7 @@ export function ExpenseModal({ authorityUid, funds, onClose }: ExpenseModalProps
     }
     
     if (availableToSpend !== null && parsedAmount > availableToSpend) {
-      setError(`Expense exceeds the available balance of $${availableToSpend.toLocaleString()}.`);
+      setError(`Expense exceeds the available balance of ${formatINR(availableToSpend)}.`);
       return;
     }
 
@@ -66,7 +67,7 @@ export function ExpenseModal({ authorityUid, funds, onClose }: ExpenseModalProps
             <div className="form-group"><label className="form-label" htmlFor="expense-amount">Amount</label><input id="expense-amount" className="form-input" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} disabled={saving} required />
               {isAmountTooHigh && !isZeroBalance && (
                 <p className="mt-1 text-xs text-destructive">
-                  Expense exceeds the available balance of ${availableToSpend?.toLocaleString()}.
+                  Expense exceeds the available balance of {formatINR(availableToSpend)}.
                 </p>
               )}
             </div>
@@ -81,8 +82,8 @@ export function ExpenseModal({ authorityUid, funds, onClose }: ExpenseModalProps
                 const fundAvailable = fund.allocatedAmount - fund.utilizedAmount;
                 const isUnavailable = fundAvailable <= 0;
                 const text = isUnavailable 
-                  ? `${fund.purpose || fund.fundId} — Available: $0 (Unavailable)`
-                  : `${fund.purpose || fund.fundId} — Available: $${fundAvailable.toLocaleString()}`;
+                  ? `${fund.purpose || fund.fundId} — Available: ${formatINR(0)} (Unavailable)`
+                  : `${fund.purpose || fund.fundId} — Available: ${formatINR(fundAvailable)}`;
                 
                 return (
                   <option key={fund.id ?? fund.fundId} value={fund.id ?? fund.fundId} disabled={isUnavailable}>
@@ -93,7 +94,7 @@ export function ExpenseModal({ authorityUid, funds, onClose }: ExpenseModalProps
             </select>
             {availableToSpend !== null && !isZeroBalance && (
               <p className="mt-1 text-xs text-muted-foreground">
-                Available to spend: ${availableToSpend.toLocaleString()}
+                Available to spend: {formatINR(availableToSpend)}
               </p>
             )}
           </div>

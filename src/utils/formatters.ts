@@ -172,3 +172,22 @@ function capitalize(str: string): string {
   if (!str) return str;
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
+
+// ── Currency formatting ───────────────────────────────────────────────────────
+
+/**
+ * Formats a monetary amount into Indian Rupees (INR, ₹).
+ * Standardized across the entire Financial Management section.
+ */
+export function formatINR(
+  amount: number | undefined | null,
+  options?: Intl.NumberFormatOptions
+): string {
+  const numericAmount = typeof amount === 'number' && isFinite(amount) ? amount : 0;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+    ...options,
+  }).format(numericAmount);
+}

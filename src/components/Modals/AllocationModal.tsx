@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { allocateFund, approveAllocation } from '../../services/financeService';
 import { useAuth } from '../../hooks/useAuth';
 import type { Fund } from '../../types/finance';
+import { formatINR } from '../../utils/formatters';
 
 interface AllocationModalProps {
   funds: Fund[];
@@ -34,7 +35,7 @@ export function AllocationModal({ funds, onClose }: AllocationModalProps) {
     }
     
     if (selectedFund && numAmount > selectedFund.remainingAmount) {
-      setError(`Amount exceeds the fund's remaining balance of $${selectedFund.remainingAmount.toLocaleString()}`);
+      setError(`Amount exceeds the fund's remaining balance of ${formatINR(selectedFund.remainingAmount)}`);
       return;
     }
 
@@ -99,7 +100,7 @@ export function AllocationModal({ funds, onClose }: AllocationModalProps) {
               >
                 {funds.map(f => (
                   <option key={f.fundId} value={f.fundId}>
-                    {f.purpose || f.fundId} (Bal: ${f.remainingAmount.toLocaleString()})
+                    {f.purpose || f.fundId} (Bal: {formatINR(f.remainingAmount)})
                   </option>
                 ))}
               </select>
@@ -120,7 +121,7 @@ export function AllocationModal({ funds, onClose }: AllocationModalProps) {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium">Amount ($)</label>
+              <label className="mb-1 block text-sm font-medium">Amount (₹)</label>
               <input
                 type="number"
                 min="0.01"
@@ -134,7 +135,7 @@ export function AllocationModal({ funds, onClose }: AllocationModalProps) {
               />
               {selectedFund && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Available: ${selectedFund.remainingAmount.toLocaleString()}
+                  Available: {formatINR(selectedFund.remainingAmount)}
                 </p>
               )}
             </div>

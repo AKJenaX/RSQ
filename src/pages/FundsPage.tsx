@@ -4,11 +4,9 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Plus } from "lucide-react";
 import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
 import { useFinance } from "../hooks/useFinance";
-import { formatTimestamp } from "../utils/formatters";
+import { formatINR, formatTimestamp } from "../utils/formatters";
 import { FundModal } from "../components/Modals/FundModal";
 import { AllocationModal } from "../components/Modals/AllocationModal";
-
-const currency = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
 const tooltipStyle = {
   backgroundColor: "var(--color-card)",
@@ -74,10 +72,10 @@ export function FundsPage() {
       {(loadState === 'success' || loadState === 'empty') && funds.length === 0 && <p className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">No funds have been created yet.</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Budget" value={currency(totalBudget)} hint={`across ${funds.length} programme${funds.length === 1 ? '' : 's'}`} />
-        <StatCard label="Total Allocated" value={currency(totalAllocated)} hint="budget distributed" />
-        <StatCard label="Total Utilized" value={currency(totalUtilized)} hint="spend to date" />
-        <StatCard label="Unallocated" value={currency(unallocated)} hint="unallocated balance" />
+        <StatCard label="Total Budget" value={formatINR(totalBudget)} hint={`across ${funds.length} programme${funds.length === 1 ? '' : 's'}`} />
+        <StatCard label="Total Allocated" value={formatINR(totalAllocated)} hint="budget distributed" />
+        <StatCard label="Total Utilized" value={formatINR(totalUtilized)} hint="spend to date" />
+        <StatCard label="Unallocated" value={formatINR(unallocated)} hint="unallocated balance" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -98,7 +96,7 @@ export function FundsPage() {
                     <Cell key={i} fill={`var(--color-chart-${(i % 5) + 1})`} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => currency(v as number)} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => formatINR(v as number)} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -115,7 +113,7 @@ export function FundsPage() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{f.purpose || f.fundId}</p>
                       <p className="text-xs text-muted-foreground">
-                        Created: {formatTimestamp(f.createdAt)} | Budget: {currency(f.totalAmount)} | Available Allocated: {currency(f.remainingAmount)}
+                        Created: {formatTimestamp(f.createdAt)} | Budget: {formatINR(f.totalAmount)} | Available Allocated: {formatINR(f.remainingAmount)}
                       </p>
                     </div>
                     <StatusBadge
@@ -125,8 +123,8 @@ export function FundsPage() {
                   </div>
                   
                   <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Allocated: {currency(f.allocatedAmount)}</span>
-                    <span>Utilized: {currency(f.utilizedAmount)} ({f.allocatedAmount > 0 ? utilizedPct : 0}%)</span>
+                    <span>Allocated: {formatINR(f.allocatedAmount)}</span>
+                    <span>Utilized: {formatINR(f.utilizedAmount)} ({f.allocatedAmount > 0 ? utilizedPct : 0}%)</span>
                   </div>
                   <div className="mt-1 h-2 overflow-hidden rounded-full bg-secondary">
                     <div className="h-full rounded-full transition-all" style={{ width: `${f.allocatedAmount > 0 ? utilizedPct : 0}%`, backgroundColor: `var(--color-chart-${(i % 5) + 1})` }} />
@@ -171,7 +169,7 @@ export function FundsPage() {
                       <td className="py-3 text-muted-foreground">{allocation.approvedBy || allocation.requestedBy || 'System'}</td>
                       <td className="py-3 text-muted-foreground">{formatTimestamp(allocation.approvedAt || allocation.createdAt)}</td>
                       <td className="py-3"><StatusBadge label={allocation.status} /></td>
-                      <td className="py-3 text-right tabular-nums">{currency(allocation.amount)}</td>
+                      <td className="py-3 text-right tabular-nums">{formatINR(allocation.amount)}</td>
                     </tr>
                     {expandedAllocationId === allocId && (
                       <tr className="bg-muted/20">

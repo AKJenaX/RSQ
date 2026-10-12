@@ -11,10 +11,9 @@ import {
 } from "recharts";
 import { Download, Search } from "lucide-react";
 import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
-import { currency } from "../lib/mock-data";
 import { useFinance } from "../hooks/useFinance";
 import { downloadCsv } from "../utils/csv";
-import { formatTimestamp } from "../utils/formatters";
+import { formatINR, formatTimestamp } from "../utils/formatters";
 
 const tooltipStyle = {
   backgroundColor: "var(--color-card)",
@@ -80,7 +79,7 @@ export function DonationsPage() {
         title="Donations Ledger"
         subtitle="Contributions received into relief funds"
         actions={
-          <button onClick={() => downloadCsv('rsq-authority-donations.csv', ['Reference', 'Donor', 'Type', 'Created at', 'Status', 'Amount'], donations.map((donation) => [donation.donationId, donation.donorName || donation.donorType, donation.donationType, donation.createdAt ? new Date(donation.createdAt).toISOString() : '', donation.status, donation.amount]))} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary">
+          <button onClick={() => downloadCsv('rsq-authority-donations.csv', ['Reference', 'Donor', 'Type', 'Created at', 'Status', 'Amount (INR)'], donations.map((donation) => [donation.donationId, donation.donorName || donation.donorType, donation.donationType, donation.createdAt ? new Date(donation.createdAt).toISOString() : '', donation.status, donation.amount != null ? formatINR(donation.amount) : '₹0.00']))} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-secondary">
             <Download className="h-4 w-4" /> Export CSV
           </button>
         }
@@ -98,10 +97,10 @@ export function DonationsPage() {
       {(loadState === 'success' || loadState === 'empty') && donations.length === 0 && <p className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">No donations have been received yet.</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Received (Sep)" value={currency(thisMonthDonations)} hint="vs August" />
-        <StatCard label="Pending Clearance" value={currency(pendingDonations)} hint="in transit" />
+        <StatCard label="Received (Sep)" value={formatINR(thisMonthDonations)} hint="vs August" />
+        <StatCard label="Pending Clearance" value={formatINR(pendingDonations)} hint="in transit" />
         <StatCard label="Active Donors" value={Array.from(new Set(donations.map(d => d.donationId))).length.toString()} hint="this quarter" />
-        <StatCard label="Avg. Gift" value={currency(donations.length > 0 ? totalDonations / donations.length : 0)} hint="individual donors" />
+        <StatCard label="Avg. Gift" value={formatINR(donations.length > 0 ? totalDonations / donations.length : 0)} hint="individual donors" />
       </div>
 
       <Panel title="Donation Inflow" description="Received against spend, last 6 months">
@@ -116,15 +115,15 @@ export function DonationsPage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
               <XAxis dataKey="day" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={60} tickFormatter={(v) => currency(v)} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => currency(v as number)} />
+              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={60} tickFormatter={(v) => formatINR(v, { maximumFractionDigits: 0 })} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any) => formatINR(v as number)} />
               <Area type="monotone" dataKey="amount" stroke="var(--color-chart-3)" fill="url(#gDon)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </Panel>
 
-      <Panel title="Transactions" description={`${rows.length} records - ${currency(total)} total`}>
+      <Panel title="Transactions" description={`${rows.length} records - ${formatINR(total)} total`}>
         <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -173,7 +172,7 @@ export function DonationsPage() {
                       {formatTimestamp(d.createdAt)}
                     </td>
                     <td className="py-3"><StatusBadge label={d.status} /></td>
-                    <td className="py-3 text-right font-medium tabular-nums">{currency(d.amount || 0)}</td>
+                    <td className="py-3 text-right font-medium tabular-nums">{formatINR(d.amount || 0)}</td>
                   </tr>
                   {expandedId === d.donationId && (
                     <tr className="bg-muted/20">

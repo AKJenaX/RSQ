@@ -6,10 +6,8 @@ import { PageHeader, Panel, StatCard, StatusBadge } from "../components/ui-kit";
 import { useFinance } from "../hooks/useFinance";
 import { useAuth } from '../hooks/useAuth';
 import { ExpenseModal } from '../components/Modals/ExpenseModal';
-import { formatTimestamp } from '../utils/formatters';
+import { formatINR, formatTimestamp } from '../utils/formatters';
 import { approveExpense, rejectExpense, payExpense } from '../services/financeService';
-
-const currency = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
 const tooltipStyle = {
   backgroundColor: "var(--color-card)",
@@ -94,8 +92,8 @@ export function ExpensesPage() {
       {!error && expenses.length === 0 && <p className="rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">No expenses have been recorded yet.</p>}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Spend (Sep)" value={currency(thisMonthExpenses)} hint="vs August" />
-        <StatCard label="Awaiting Approval" value={currency(pendingExpenses)} hint={`${expenses.filter(e => e.status === "PENDING").length} request${expenses.filter(e => e.status === "PENDING").length === 1 ? '' : 's'}`} />
+        <StatCard label="Spend (Sep)" value={formatINR(thisMonthExpenses)} hint="vs August" />
+        <StatCard label="Awaiting Approval" value={formatINR(pendingExpenses)} hint={`${expenses.filter(e => e.status === "PENDING").length} request${expenses.filter(e => e.status === "PENDING").length === 1 ? '' : 's'}`} />
         <StatCard label="Vendors Paid" value={Array.from(new Set(paidExpenses.map(e => e.vendor))).length.toString()} hint="this month" />
         <StatCard label="Rejected" value={expenses.filter(e => e.status === "REJECTED").length.toString()} hint="policy breach" />
       </div>
@@ -106,15 +104,15 @@ export function ExpensesPage() {
             <BarChart data={expenseChart}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
               <XAxis dataKey="name" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={60} tickFormatter={(v) => currency(v as number)} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "var(--color-accent)" }} formatter={(v: any) => currency(v as number)} />
+              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} width={60} tickFormatter={(v) => formatINR(v as number, { maximumFractionDigits: 0 })} />
+              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: "var(--color-accent)" }} formatter={(v: any) => formatINR(v as number)} />
               <Bar dataKey="amount" fill="var(--color-chart-4)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </Panel>
 
-      <Panel title="Expense Register" description={`${rows.length} records · ${currency(total)} total`}>
+      <Panel title="Expense Register" description={`${rows.length} records · ${formatINR(total)} total`}>
         <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -163,7 +161,7 @@ export function ExpensesPage() {
                       <td className="py-3 text-muted-foreground">{e.vendor}</td>
                       <td className="py-3 text-muted-foreground">{formatTimestamp(e.createdAt)}</td>
                       <td className="py-3"><StatusBadge label={e.status} /></td>
-                      <td className="py-3 text-right tabular-nums">{currency(e.amount)}</td>
+                      <td className="py-3 text-right tabular-nums">{formatINR(e.amount)}</td>
                     </tr>
                     {expandedExpenseId === e.id && (
                       <tr className="bg-muted/20">
@@ -179,7 +177,7 @@ export function ExpensesPage() {
                             </div>
                             <div>
                               <p className="font-semibold text-foreground">Amount</p>
-                              <p className="text-muted-foreground tabular-nums">{currency(e.amount)}</p>
+                              <p className="text-muted-foreground tabular-nums">{formatINR(e.amount)}</p>
                             </div>
                             <div>
                               <p className="font-semibold text-foreground">Vendor</p>
